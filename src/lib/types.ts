@@ -41,3 +41,22 @@ export interface InventoryItem {
   salesInvoiceNumber?: string;
   salesData?: { date: string; quantitySold: number }[];
 }
+
+export interface VehiclePart {
+  itemStdCode: string;
+  quantity: number;
+}
+
+export interface VehicleModel {
+  id: string;
+  name: string;
+  parts: VehiclePart[];
+}
+
+export interface AssembledVehicle {
+  id: string;
+  modelId: string;
+  chassisNumber: string;
+  motorNumber: string;
+  assemblyDate: Date;
+}

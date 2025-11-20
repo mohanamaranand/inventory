@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useMemo, useRef } from "react";
-import { type InventoryItem } from "@/lib/types";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback } from "react";
+import { type InventoryItem, type VehicleModel, type AssembledVehicle } from "@/lib/types";
 import { initialInventory } from "@/lib/data";
 
 interface InventoryContextType {
@@ -10,13 +10,25 @@ interface InventoryContextType {
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
   deleteItem: (id: string) => void;
   getItem: (id: string) => InventoryItem | undefined;
+  getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
+  vehicleModels: VehicleModel[];
+  addVehicleModel: (model: Omit<VehicleModel, "id">) => void;
+  updateVehicleModel: (id: string, updatedModel: Partial<VehicleModel>) => void;
+  getVehicleModel: (id: string) => VehicleModel | undefined;
+  assembledVehicles: AssembledVehicle[];
+  assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
+  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
+  const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
+
   const nextId = useRef(initialInventory.length + 1);
+  const nextModelId = useRef(1);
+  const nextVehicleId = useRef(1);
 
   const addItem = (item: Omit<InventoryItem, "id" | "itemStatus">) => {
     const newItem: InventoryItem = {
@@ -33,7 +45,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       prev.map((item) => (item.id === id ? { ...item, ...updatedItem } : item))
     );
   };
-
+  
   const deleteItem = (id: string) => {
     setInventory((prev) => prev.filter((item) => item.id !== id));
   };
@@ -42,13 +54,80 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return inventory.find(item => item.id === id);
   }
 
+  const getItemByStdCode = useCallback((stdCode: string) => {
+    return inventory.find(item => item.itemStdCode === stdCode);
+  }, [inventory]);
+
+  const addVehicleModel = (model: Omit<VehicleModel, "id">) => {
+    const newModel: VehicleModel = {
+      ...model,
+      id: `model-${nextModelId.current}`,
+    };
+    setVehicleModels(prev => [newModel, ...prev]);
+    nextModelId.current += 1;
+  };
+
+  const updateVehicleModel = (id: string, updatedModel: Partial<VehicleModel>) => {
+    setVehicleModels(prev => prev.map(model => model.id === id ? { ...model, ...updatedModel } : model));
+  };
+
+  const getVehicleModel = (id: string) => {
+    return vehicleModels.find(model => model.id === id);
+  };
+
+  const assembleVehicle = (vehicle: Omit<AssembledVehicle, "id">) => {
+    const model = getVehicleModel(vehicle.modelId);
+    if (!model) {
+      throw new Error("Vehicle model not found");
+    }
+
+    // Check if there is enough stock
+    for (const part of model.parts) {
+      const inventoryItem = getItemByStdCode(part.itemStdCode);
+      if (!inventoryItem || inventoryItem.quantity < part.quantity) {
+        throw new Error(`Not enough stock for ${inventoryItem?.productName || part.itemStdCode}`);
+      }
+    }
+
+    // Reduce inventory
+    setInventory(prev => {
+      const newInventory = [...prev];
+      for (const part of model.parts) {
+        const itemIndex = newInventory.findIndex(i => i.itemStdCode === part.itemStdCode);
+        if (itemIndex > -1) {
+          const updatedItem = { ...newInventory[itemIndex] };
+          updatedItem.quantity -= part.quantity;
+          if(updatedItem.quantity === 0) {
+            updatedItem.itemStatus = 'Sold as vehicle';
+          }
+          newInventory[itemIndex] = updatedItem;
+        }
+      }
+      return newInventory;
+    });
+
+    const newVehicle: AssembledVehicle = {
+      ...vehicle,
+      id: `vehicle-${nextVehicleId.current}`,
+    };
+    setAssembledVehicles(prev => [newVehicle, ...prev]);
+    nextVehicleId.current += 1;
+  };
+
   const value = useMemo(() => ({
     inventory,
     addItem,
     updateItem,
     deleteItem,
     getItem,
-  }), [inventory]);
+    getItemByStdCode,
+    vehicleModels,
+    addVehicleModel,
+    updateVehicleModel,
+    getVehicleModel,
+    assembledVehicles,
+    assembleVehicle,
+  }), [inventory, vehicleModels, assembledVehicles, getItemByStdCode]);
 
   return (
     <InventoryContext.Provider value={value}>
