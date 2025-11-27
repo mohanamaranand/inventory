@@ -13,6 +13,7 @@ export const ITEM_CATEGORIES = [
 
 export const ITEM_STATUSES = [
   'In Stock',
+  'Out of Stock',
   'Assembled',
   'Sold as Spare',
   'Sold as vehicle',

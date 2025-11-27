@@ -158,7 +158,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           const updatedItem = { ...newInventory[itemIndex] };
           updatedItem.quantity -= part.quantity;
           if(updatedItem.quantity === 0) {
-            updatedItem.itemStatus = 'Sold as vehicle';
+            updatedItem.itemStatus = 'Out of Stock';
           }
           newInventory[itemIndex] = updatedItem;
         }
