@@ -36,14 +36,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ITEM_CATEGORIES, ITEM_STATUSES } from "@/lib/types";
+import { ITEM_CATEGORIES, ITEM_STATUSES, InventoryItem } from "@/lib/types";
+import { useInventory } from "@/context/inventory-context";
+import { useToast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends InventoryItem, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -54,6 +57,9 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+
+  const { deleteMultipleItems } = useInventory();
+  const { toast } = useToast();
 
   const table = useReactTable({
     data,
@@ -74,6 +80,17 @@ export function DataTable<TData, TValue>({
     },
   });
 
+  const handleDeleteSelected = () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    const idsToDelete = selectedRows.map(row => row.original.id);
+    deleteMultipleItems(idsToDelete);
+    table.resetRowSelection();
+    toast({
+      title: `${idsToDelete.length} Items Deleted`,
+      description: "The selected items have been removed from your inventory.",
+    });
+  };
+
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center p-4 gap-4 flex-wrap">
@@ -87,6 +104,15 @@ export function DataTable<TData, TValue>({
           }
           className="max-w-sm"
         />
+        {table.getFilteredSelectedRowModel().rows.length > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleDeleteSelected}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
+          </Button>
+        )}
         <div className="flex gap-2 ml-auto">
             <Select
                 value={(table.getColumn("itemCategory")?.getFilterValue() as string) ?? ""}
@@ -191,6 +217,10 @@ export function DataTable<TData, TValue>({
         </Table>
       </div>
       <div className="flex items-center justify-end space-x-2 p-4 border-t">
+        <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+        </div>
         <Button
           variant="outline"
           size="sm"

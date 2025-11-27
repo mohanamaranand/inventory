@@ -10,6 +10,7 @@ interface InventoryContextType {
   addBatchItems: (items: Omit<InventoryItem, "id" | "itemStatus">[]) => void;
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
   deleteItem: (id: string) => void;
+  deleteMultipleItems: (ids: string[]) => void;
   getItem: (id: string) => InventoryItem | undefined;
   getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
   vehicleModels: VehicleModel[];
@@ -64,6 +65,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setInventory((prev) => prev.filter((item) => item.id !== id));
   };
   
+  const deleteMultipleItems = (ids: string[]) => {
+    setInventory((prev) => prev.filter((item) => !ids.includes(item.id)));
+  };
+
   const getItem = (id: string) => {
     return inventory.find(item => item.id === id);
   }
@@ -134,6 +139,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     addBatchItems,
     updateItem,
     deleteItem,
+    deleteMultipleItems,
     getItem,
     getItemByStdCode,
     vehicleModels,
