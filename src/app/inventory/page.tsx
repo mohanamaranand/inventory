@@ -53,19 +53,20 @@ export default function InventoryPage() {
         
         const newItems: Omit<InventoryItem, "id">[] = [];
         let updatedCount = 0;
-        let skippedCount = 0;
+        let skippedCodeCount = 0;
+        let skippedCategoryCount = 0;
 
         json.forEach((row) => {
           const itemStdCode = row["Item STD Code"] || row["itemStdCode"];
           
           if (!itemStdCode) {
-            skippedCount++;
+            skippedCodeCount++;
             return;
           }
 
           const itemCategory = (row["Item Category"] || row["itemCategory"]) as any;
           if (!ITEM_CATEGORIES.includes(itemCategory)) {
-            skippedCount++;
+            skippedCategoryCount++;
             return;
           }
 
@@ -97,9 +98,15 @@ export default function InventoryPage() {
             addBatchItems(newItems);
         }
 
+        const descriptions = [];
+        if (newItems.length > 0) descriptions.push(`${newItems.length} new items added.`);
+        if (updatedCount > 0) descriptions.push(`${updatedCount} existing items updated.`);
+        if (skippedCodeCount > 0) descriptions.push(`${skippedCodeCount} rows skipped due to missing 'Item STD Code'.`);
+        if (skippedCategoryCount > 0) descriptions.push(`${skippedCategoryCount} rows skipped due to an invalid 'Item Category'.`);
+
         toast({
           title: "Import Complete",
-          description: `${newItems.length} new items added, ${updatedCount} items updated. ${skippedCount} items were skipped (missing code or invalid category).`,
+          description: descriptions.join(' '),
         });
 
       } catch (error) {
@@ -107,7 +114,7 @@ export default function InventoryPage() {
         toast({
           variant: "destructive",
           title: "Import Failed",
-          description: "There was an error processing the Excel file.",
+          description: "There was an error processing the Excel file. Please ensure it's a valid .xlsx file.",
         });
       } finally {
         // Reset file input
