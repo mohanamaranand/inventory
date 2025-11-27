@@ -10,51 +10,66 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Wrench } from "lucide-react";
+import { Wrench, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function BuildableVehicles() {
-  const { vehicleModels, getItemByStdCode } = useInventory();
+  const { vehicleModels, getItemByStdCode, assembledVehicles } = useInventory();
 
-  const buildableCounts = useMemo(() => {
+  const vehicleStats = useMemo(() => {
+    const assembledCounts = assembledVehicles.reduce((acc, vehicle) => {
+      acc[vehicle.modelId] = (acc[vehicle.modelId] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     return vehicleModels.map((model) => {
+      let buildableCount: number;
       if (model.parts.length === 0) {
-        return { modelName: model.name, count: Infinity };
+        buildableCount = Infinity; // Can't build if no parts are defined, but can't divide by zero
+      } else {
+        const possibleCounts = model.parts.map((part) => {
+          const inventoryItem = getItemByStdCode(part.itemStdCode);
+          const availableQuantity = inventoryItem ? inventoryItem.quantity : 0;
+          if (part.quantity === 0) return Infinity; // Avoid division by zero
+          return Math.floor(availableQuantity / part.quantity);
+        });
+        buildableCount = Math.min(...possibleCounts);
       }
 
-      const possibleCounts = model.parts.map((part) => {
-        const inventoryItem = getItemByStdCode(part.itemStdCode);
-        const availableQuantity = inventoryItem ? inventoryItem.quantity : 0;
-        return Math.floor(availableQuantity / part.quantity);
-      });
-
-      return { modelName: model.name, count: Math.min(...possibleCounts) };
+      return {
+        modelId: model.id,
+        modelName: model.name,
+        buildableCount,
+        assembledCount: assembledCounts[model.id] || 0,
+      };
     });
-  }, [vehicleModels, getItemByStdCode]);
+  }, [vehicleModels, assembledVehicles, getItemByStdCode]);
 
   return (
     <Card className="shadow-md">
       <CardHeader>
-        <CardTitle>Buildable Vehicles</CardTitle>
+        <CardTitle>Vehicle Build Status</CardTitle>
         <CardDescription>
-          Estimated number of vehicles you can assemble with current inventory.
+          Your current production capacity based on available inventory.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {vehicleModels.length > 0 ? (
           <ScrollArea className="h-48">
             <div className="space-y-4">
-              {buildableCounts.map(({ modelName, count }) => (
-                <div key={modelName} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-muted p-2 rounded-md">
-                      <Wrench className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <p className="font-medium">{modelName}</p>
+              {vehicleStats.map((stats) => (
+                <div key={stats.modelId} className="flex items-center justify-between">
+                  <p className="font-medium">{stats.modelName}</p>
+                  <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Assembled">
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                        <span className="font-bold text-foreground text-base">{stats.assembledCount}</span>
+                     </div>
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Buildable">
+                        <Wrench className="h-5 w-5 text-blue-500" />
+                        <span className="font-bold text-foreground text-base">{stats.buildableCount}</span>
+                     </div>
                   </div>
-                  <Badge variant="secondary" className="text-lg">
-                    {count}
-                  </Badge>
                 </div>
               ))}
             </div>
