@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -40,6 +41,17 @@ import { ITEM_CATEGORIES, ITEM_STATUSES, InventoryItem } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+  } from "@/components/ui/alert-dialog"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -57,6 +69,8 @@ export function DataTable<TData extends InventoryItem, TValue>({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+  const [isAlertOpen, setIsAlertOpen] = React.useState(false);
+
 
   const { deleteMultipleItems } = useInventory();
   const { toast } = useToast();
@@ -80,16 +94,19 @@ export function DataTable<TData extends InventoryItem, TValue>({
     },
   });
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = (restock: boolean) => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
     const idsToDelete = selectedRows.map(row => row.original.id);
-    deleteMultipleItems(idsToDelete);
+    deleteMultipleItems(idsToDelete, restock);
     table.resetRowSelection();
     toast({
       title: `${idsToDelete.length} Items Deleted`,
-      description: "The selected items have been removed from your inventory.",
+      description: `The selected items have been removed from your inventory. ${restock ? 'Parts restocked.' : ''}`,
     });
+    setIsAlertOpen(false);
   };
+  
+  const selectedRowsContainAssembled = table.getFilteredSelectedRowModel().rows.some(row => row.original.itemCategory === 'Assembled Vehicle');
 
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
@@ -105,13 +122,34 @@ export function DataTable<TData extends InventoryItem, TValue>({
           className="max-w-sm"
         />
         {table.getFilteredSelectedRowModel().rows.length > 0 && (
-          <Button
-            variant="destructive"
-            onClick={handleDeleteSelected}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
-          </Button>
+            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Selected Items?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the selected items.
+                            {selectedRowsContainAssembled && " For assembled vehicles, you can choose to restock their parts."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        {selectedRowsContainAssembled && (
+                            <AlertDialogAction onClick={() => handleDeleteSelected(true)}>
+                                Delete & Restock Parts
+                            </AlertDialogAction>
+                        )}
+                        <AlertDialogAction onClick={() => handleDeleteSelected(false)}>
+                            Delete Permanently
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         )}
         <div className="flex gap-2 ml-auto">
             <Select

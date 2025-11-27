@@ -36,12 +36,12 @@ export function AssembledVehiclesTable() {
   const { assembledVehicles, getVehicleModel, deleteAssembledVehicle } = useInventory();
   const { toast } = useToast();
 
-  const handleDelete = (vehicleId: string, modelName: string, chassisNumber: string) => {
-    deleteAssembledVehicle(vehicleId);
+  const handleDelete = (vehicleId: string, modelName: string, chassisNumber: string, restock: boolean) => {
+    deleteAssembledVehicle(vehicleId, restock);
     toast({
         variant: "destructive",
         title: "Vehicle Deleted",
-        description: `The ${modelName} with chassis ${chassisNumber} has been deleted.`
+        description: `The ${modelName} with chassis ${chassisNumber} has been deleted. ${restock ? 'Parts have been restocked.' : ''}`
     });
   }
 
@@ -88,15 +88,18 @@ export function AssembledVehiclesTable() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the assembled vehicle record and its corresponding entry in the inventory.
+                                Do you want to restock the parts from this vehicle back into inventory, or just delete the vehicle record?
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber)}>
-                                Delete
+                              <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, false)}>
+                                Delete Only
+                              </AlertDialogAction>
+                              <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, true)}>
+                                Delete and Restock
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>

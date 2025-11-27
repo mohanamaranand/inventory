@@ -10,8 +10,8 @@ interface InventoryContextType {
   addItem: (item: Omit<InventoryItem, "id" | "itemStatus">) => void;
   addBatchItems: (items: Omit<InventoryItem, "id" | "itemStatus">[]) => void;
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
-  deleteItem: (id: string) => void;
-  deleteMultipleItems: (ids: string[]) => void;
+  deleteItem: (id: string, restock?: boolean) => void;
+  deleteMultipleItems: (ids: string[], restock?: boolean) => void;
   getItem: (id: string) => InventoryItem | undefined;
   getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
   vehicleModels: VehicleModel[];
@@ -20,7 +20,7 @@ interface InventoryContextType {
   getVehicleModel: (id: string) => VehicleModel | undefined;
   assembledVehicles: AssembledVehicle[];
   assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
-  deleteAssembledVehicle: (id: string) => void;
+  deleteAssembledVehicle: (id: string, restock?: boolean) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -76,7 +76,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const newItem: InventoryItem = {
       ...item,
       id: `item-${nextId.current}`,
-      itemStatus: "In Stock",
+      itemStatus: item.quantity === 0 ? "Out of Stock" : "In Stock",
     };
     setInventory((prev) => [newItem, ...prev]);
     nextId.current += 1;
@@ -87,7 +87,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const newItem: InventoryItem = {
         ...item,
         id: `item-${nextId.current}`,
-        itemStatus: "In Stock",
+        itemStatus: item.quantity === 0 ? "Out of Stock" : "In Stock",
       };
       nextId.current += 1;
       return newItem;
@@ -101,26 +101,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     );
   };
   
-  const deleteItem = (id: string) => {
+  const deleteItem = (id: string, restock: boolean = false) => {
     setInventory((prev) => {
         const itemToDelete = prev.find(item => item.id === id);
         if (itemToDelete && itemToDelete.itemCategory === 'Assembled Vehicle') {
-            // Also delete from assembledVehicles list
-            setAssembledVehicles(vehicles => vehicles.filter(v => v.chassisNumber !== itemToDelete.itemStdCode));
+            deleteAssembledVehicle(itemToDelete.itemStdCode, restock, true);
         }
         return prev.filter((item) => item.id !== id);
     });
   };
   
-  const deleteMultipleItems = (ids: string[]) => {
+  const deleteMultipleItems = (ids: string[], restock: boolean = false) => {
     setInventory((prev) => {
         const itemsToDelete = prev.filter(item => ids.includes(item.id));
-        const chassisNumbersToDelete = itemsToDelete
-            .filter(item => item.itemCategory === 'Assembled Vehicle')
-            .map(item => item.itemStdCode);
+        const assembledItems = itemsToDelete.filter(item => item.itemCategory === 'Assembled Vehicle');
         
-        if (chassisNumbersToDelete.length > 0) {
-            setAssembledVehicles(vehicles => vehicles.filter(v => !chassisNumbersToDelete.includes(v.chassisNumber)));
+        if (assembledItems.length > 0) {
+           assembledItems.forEach(item => {
+               deleteAssembledVehicle(item.itemStdCode, restock, true);
+           });
         }
 
         return prev.filter((item) => !ids.includes(item.id));
@@ -210,14 +209,40 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     addItem(assembledVehicleItem);
   };
 
-  const deleteAssembledVehicle = (id: string) => {
-    const vehicleToDelete = assembledVehicles.find(v => v.id === id);
+  const deleteAssembledVehicle = (idOrChassis: string, restock: boolean = false, fromInventory: boolean = false) => {
+    const vehicleToDelete = fromInventory 
+        ? assembledVehicles.find(v => v.chassisNumber === idOrChassis)
+        : assembledVehicles.find(v => v.id === idOrChassis);
+
     if (!vehicleToDelete) return;
 
+    if (restock) {
+      const model = getVehicleModel(vehicleToDelete.modelId);
+      if (model) {
+        setInventory(prev => {
+          const newInventory = [...prev];
+          for (const part of model.parts) {
+            const itemIndex = newInventory.findIndex(i => i.itemStdCode === part.itemStdCode);
+            if (itemIndex > -1) {
+              const updatedItem = { ...newInventory[itemIndex] };
+              updatedItem.quantity += part.quantity;
+              if (updatedItem.itemStatus === 'Out of Stock') {
+                updatedItem.itemStatus = 'In Stock';
+              }
+              newInventory[itemIndex] = updatedItem;
+            }
+          }
+          return newInventory;
+        });
+      }
+    }
+    
     // Remove the corresponding item from the main inventory
-    setInventory(prev => prev.filter(item => item.itemStdCode !== vehicleToDelete.chassisNumber));
+    if (!fromInventory) {
+        setInventory(prev => prev.filter(item => item.itemStdCode !== vehicleToDelete.chassisNumber));
+    }
     // Remove the vehicle from the assembled vehicles list
-    setAssembledVehicles(prev => prev.filter(v => v.id !== id));
+    setAssembledVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
   };
 
 

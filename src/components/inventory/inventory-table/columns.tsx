@@ -25,6 +25,18 @@ import { ITEM_STATUSES } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useState } from "react";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
@@ -106,6 +118,10 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           description: `"${item.productName}" status changed to ${newStatus}.`,
         });
       };
+      
+      if (item.itemCategory === 'Assembled Vehicle') {
+        return <Badge variant="default">{item.itemStatus}</Badge>;
+      }
 
       return (
         <Select onValueChange={handleStatusChange} defaultValue={item.itemStatus}>
@@ -144,15 +160,44 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
       const { deleteItem } = useInventory();
       const { toast } = useToast();
       const item = row.original;
+      const [dialogOpen, setDialogOpen] = useState(false);
 
-      const handleDelete = () => {
-        deleteItem(item.id);
+      const handleDelete = (restock: boolean) => {
+        deleteItem(item.id, restock);
         toast({
           variant: "destructive",
           title: "Item Deleted",
           description: `"${item.productName}" has been removed from inventory.`,
         });
+        setDialogOpen(false);
       };
+
+      if (item.itemCategory === "Assembled Vehicle") {
+        return (
+          <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Do you want to restock the parts from this vehicle back into inventory, or just delete the vehicle record?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <DropdownMenuItem onClick={() => onEdit(item.id)}>Edit</DropdownMenuItem>
+                <AlertDialogAction onClick={() => handleDelete(false)}>Delete Only</AlertDialogAction>
+                <AlertDialogAction onClick={() => handleDelete(true)}>Delete & Restock</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      }
 
       return (
         <DropdownMenu>
@@ -168,7 +213,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
               Edit
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={handleDelete}
+              onClick={() => handleDelete(false)}
               className="text-destructive focus:bg-destructive/10 focus:text-destructive"
             >
               Delete
