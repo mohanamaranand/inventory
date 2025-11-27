@@ -7,6 +7,7 @@ import { initialInventory } from "@/lib/data";
 interface InventoryContextType {
   inventory: InventoryItem[];
   addItem: (item: Omit<InventoryItem, "id" | "itemStatus">) => void;
+  addBatchItems: (items: Omit<InventoryItem, "id" | "itemStatus">[]) => void;
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
   deleteItem: (id: string) => void;
   getItem: (id: string) => InventoryItem | undefined;
@@ -38,6 +39,19 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
     setInventory((prev) => [newItem, ...prev]);
     nextId.current += 1;
+  };
+  
+  const addBatchItems = (items: Omit<InventoryItem, "id" | "itemStatus">[]) => {
+    const newItems = items.map(item => {
+      const newItem: InventoryItem = {
+        ...item,
+        id: nextId.current.toString(),
+        itemStatus: "In Stock",
+      };
+      nextId.current += 1;
+      return newItem;
+    });
+    setInventory(prev => [...newItems, ...prev]);
   };
 
   const updateItem = (id: string, updatedItem: Partial<InventoryItem>) => {
@@ -117,6 +131,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const value = useMemo(() => ({
     inventory,
     addItem,
+    addBatchItems,
     updateItem,
     deleteItem,
     getItem,
