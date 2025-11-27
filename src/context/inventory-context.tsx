@@ -35,6 +35,10 @@ const getInitialState = <T,>(key: string, fallback: T): T => {
             const parsed = JSON.parse(item);
             return parsed.map((i: any) => ({...i, date: new Date(i.date)}));
         }
+         if (key === 'assembledVehicles') {
+            const parsed = JSON.parse(item);
+            return parsed.map((v: any) => ({...v, assemblyDate: new Date(v.assemblyDate)}));
+        }
         return JSON.parse(item);
       }
     } catch (error) {
@@ -61,14 +65,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [assembledVehicles]);
 
 
-  const nextId = useRef(inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id))) + 1 : 1);
-  const nextModelId = useRef(1);
-  const nextVehicleId = useRef(1);
+  const nextId = useRef(inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id.split('-').pop() || '0'))) + 1 : 1);
+  const nextModelId = useRef(vehicleModels.length > 0 ? Math.max(...vehicleModels.map(m => parseInt(m.id.split('-').pop() || '0'))) + 1 : 1);
+  const nextVehicleId = useRef(assembledVehicles.length > 0 ? Math.max(...assembledVehicles.map(v => parseInt(v.id.split('-').pop() || '0'))) + 1 : 1);
+
 
   const addItem = (item: Omit<InventoryItem, "id" | "itemStatus">) => {
     const newItem: InventoryItem = {
       ...item,
-      id: nextId.current.toString(),
+      id: `item-${nextId.current}`,
       itemStatus: "In Stock",
     };
     setInventory((prev) => [newItem, ...prev]);
@@ -79,7 +84,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const newItems = items.map(item => {
       const newItem: InventoryItem = {
         ...item,
-        id: nextId.current.toString(),
+        id: `item-${nextId.current}`,
         itemStatus: "In Stock",
       };
       nextId.current += 1;
@@ -133,12 +138,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       throw new Error("Vehicle model not found");
     }
 
+    let totalCost = 0;
+
     // Check if there is enough stock
     for (const part of model.parts) {
       const inventoryItem = getItemByStdCode(part.itemStdCode);
       if (!inventoryItem || inventoryItem.quantity < part.quantity) {
         throw new Error(`Not enough stock for ${inventoryItem?.productName || part.itemStdCode}`);
       }
+      totalCost += (inventoryItem.unitPrice || 0) * part.quantity;
     }
 
     // Reduce inventory
@@ -164,6 +172,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
     setAssembledVehicles(prev => [newVehicle, ...prev]);
     nextVehicleId.current += 1;
+
+    // Add assembled vehicle to inventory
+    const assembledVehicleItem: InventoryItem = {
+        id: newVehicle.id,
+        purchaseInvoiceNumber: 'ASL-' + newVehicle.id,
+        vendorName: 'In-house Assembly',
+        date: vehicle.assemblyDate,
+        itemStdCode: vehicle.chassisNumber,
+        itemCategory: 'Assembled Vehicle',
+        productName: model.name,
+        productDetails: `Assembled vehicle with Motor No: ${vehicle.motorNumber}`,
+        quantity: 1,
+        storageLocation: 'Showroom',
+        unitPrice: totalCost,
+        itemStatus: 'In Stock',
+    };
+
+    setInventory(prev => [assembledVehicleItem, ...prev]);
+
   };
 
   const value = useMemo(() => ({

@@ -6,6 +6,7 @@ export const ITEM_CATEGORIES = [
   'Machinery',
   'Battery Part',
   'Solar Material',
+  'Assembled Vehicle',
   'Non Business Items',
   'Other Business Items',
 ] as const;
