@@ -10,10 +10,10 @@ import { columns } from "@/components/inventory/inventory-table/columns";
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useToast } from "@/hooks/use-toast";
-import { ITEM_CATEGORIES, ITEM_STATUSES, InventoryItem } from "@/lib/types";
+import { ITEM_CATEGORIES, InventoryItem } from "@/lib/types";
 
 export default function InventoryPage() {
-  const { inventory, addBatchItems, getItemByStdCode } = useInventory();
+  const { inventory, addBatchItems, getItemByStdCode, updateItem } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,24 +52,31 @@ export default function InventoryPage() {
         const json: any[] = XLSX.utils.sheet_to_json(worksheet);
         
         const newItems: Omit<InventoryItem, "id">[] = [];
+        let updatedCount = 0;
         let skippedCount = 0;
 
         json.forEach((row) => {
           const itemStdCode = row["Item STD Code"] || row["itemStdCode"];
           
-          if (!itemStdCode || getItemByStdCode(itemStdCode)) {
+          if (!itemStdCode) {
+            skippedCount++;
+            return;
+          }
+
+          const itemCategory = (row["Item Category"] || row["itemCategory"]) as any;
+          if (!ITEM_CATEGORIES.includes(itemCategory)) {
             skippedCount++;
             return;
           }
 
           const date = row["Date"] ? new Date(row["Date"]) : new Date();
 
-          const newItem: Omit<InventoryItem, "id" | "itemStatus"> = {
+          const itemData: Omit<InventoryItem, "id" | "itemStatus"> = {
             purchaseInvoiceNumber: String(row["Purchase Invoice Number"] || row["purchaseInvoiceNumber"] || ""),
             vendorName: String(row["Vendor Name"] || row["vendorName"] || ""),
             date: date,
             itemStdCode: String(itemStdCode),
-            itemCategory: (row["Item Category"] || row["itemCategory"]) as any,
+            itemCategory: itemCategory,
             productName: String(row["Product Name"] || row["productName"] || ""),
             productDetails: String(row["Product Details"] || row["productDetails"] || ""),
             quantity: Number(row["Quantity"] || row["quantity"] || 0),
@@ -77,10 +84,12 @@ export default function InventoryPage() {
             unitPrice: Number(row["Unit Price"] || row["unitPrice"] || 0),
           };
 
-          if (ITEM_CATEGORIES.includes(newItem.itemCategory)) {
-             newItems.push(newItem);
+          const existingItem = getItemByStdCode(itemData.itemStdCode);
+          if (existingItem) {
+            updateItem(existingItem.id, itemData);
+            updatedCount++;
           } else {
-            skippedCount++;
+            newItems.push(itemData);
           }
         });
         
@@ -90,7 +99,7 @@ export default function InventoryPage() {
 
         toast({
           title: "Import Complete",
-          description: `${newItems.length} items were successfully imported. ${skippedCount} items were skipped (duplicates or invalid category).`,
+          description: `${newItems.length} new items added, ${updatedCount} items updated. ${skippedCount} items were skipped (missing code or invalid category).`,
         });
 
       } catch (error) {
