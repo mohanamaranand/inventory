@@ -102,11 +102,29 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const deleteItem = (id: string) => {
-    setInventory((prev) => prev.filter((item) => item.id !== id));
+    setInventory((prev) => {
+        const itemToDelete = prev.find(item => item.id === id);
+        if (itemToDelete && itemToDelete.itemCategory === 'Assembled Vehicle') {
+            // Also delete from assembledVehicles list
+            setAssembledVehicles(vehicles => vehicles.filter(v => v.chassisNumber !== itemToDelete.itemStdCode));
+        }
+        return prev.filter((item) => item.id !== id);
+    });
   };
   
   const deleteMultipleItems = (ids: string[]) => {
-    setInventory((prev) => prev.filter((item) => !ids.includes(item.id)));
+    setInventory((prev) => {
+        const itemsToDelete = prev.filter(item => ids.includes(item.id));
+        const chassisNumbersToDelete = itemsToDelete
+            .filter(item => item.itemCategory === 'Assembled Vehicle')
+            .map(item => item.itemStdCode);
+        
+        if (chassisNumbersToDelete.length > 0) {
+            setAssembledVehicles(vehicles => vehicles.filter(v => !chassisNumbersToDelete.includes(v.chassisNumber)));
+        }
+
+        return prev.filter((item) => !ids.includes(item.id));
+    });
   };
 
   const getItem = (id: string) => {
