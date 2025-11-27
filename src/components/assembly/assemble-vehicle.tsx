@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,7 +42,7 @@ const formSchema = z.object({
 });
 
 export function AssembleVehicle() {
-  const { vehicleModels, assembleVehicle, getItemByStdCode } = useInventory();
+  const { vehicleModels, assembleVehicle, getItemByStdCode, assembledVehicles } = useInventory();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,6 +72,24 @@ export function AssembleVehicle() {
   const canAssemble = partsAvailability.every(p => p.sufficient);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
+    // Check for duplicate chassis number
+    if (assembledVehicles.some(v => v.chassisNumber === values.chassisNumber)) {
+      form.setError("chassisNumber", {
+        type: "manual",
+        message: "This chassis number is already in use.",
+      });
+      return;
+    }
+
+    // Check for duplicate motor number
+    if (assembledVehicles.some(v => v.motorNumber === values.motorNumber)) {
+      form.setError("motorNumber", {
+        type: "manual",
+        message: "This motor number is already in use.",
+      });
+      return;
+    }
+
     try {
       assembleVehicle({ ...values, assemblyDate: new Date() });
       toast({
@@ -158,7 +177,7 @@ export function AssembleVehicle() {
                   <FormItem>
                     <FormLabel>Chassis Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter chassis number" {...field} />
+                      <Input placeholder="Enter unique chassis number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -171,7 +190,7 @@ export function AssembleVehicle() {
                   <FormItem>
                     <FormLabel>Motor Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter motor number" {...field} />
+                      <Input placeholder="Enter unique motor number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
