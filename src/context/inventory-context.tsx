@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
@@ -174,8 +175,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     nextVehicleId.current += 1;
 
     // Add assembled vehicle to inventory
-    const assembledVehicleItem: InventoryItem = {
-        id: newVehicle.id,
+    const assembledVehicleItem: Omit<InventoryItem, 'id' | 'itemStatus'> = {
         purchaseInvoiceNumber: 'ASL-' + newVehicle.id,
         vendorName: 'In-house Assembly',
         date: vehicle.assemblyDate,
@@ -186,10 +186,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         quantity: 1,
         storageLocation: 'Showroom',
         unitPrice: totalCost,
-        itemStatus: 'In Stock',
     };
 
-    setInventory(prev => [assembledVehicleItem, ...prev]);
+    addItem(assembledVehicleItem);
 
   };
 

@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -52,6 +53,10 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
   {
     accessorKey: "id",
     header: "S.No",
+    cell: ({ row }) => {
+        const id = row.original.id;
+        return <span>{id.split('-').pop()}</span>;
+    },
   },
   {
     accessorKey: "productName",
