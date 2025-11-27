@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback } from "react";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
 import { type InventoryItem, type VehicleModel, type AssembledVehicle } from "@/lib/types";
 import { initialInventory } from "@/lib/data";
 
@@ -23,12 +23,45 @@ interface InventoryContextType {
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
-export const InventoryProvider = ({ children }: { children: ReactNode }) => {
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
-  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
-  const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
+const getInitialState = <T,>(key: string, fallback: T): T => {
+    if (typeof window === "undefined") {
+      return fallback;
+    }
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item) {
+        // The date objects need to be reconstituted from strings
+        if (key === 'inventory') {
+            const parsed = JSON.parse(item);
+            return parsed.map((i: any) => ({...i, date: new Date(i.date)}));
+        }
+        return JSON.parse(item);
+      }
+    } catch (error) {
+      console.warn(`Error reading localStorage key “${key}”:`, error);
+    }
+    return fallback;
+  };
 
-  const nextId = useRef(initialInventory.length + 1);
+export const InventoryProvider = ({ children }: { children: ReactNode }) => {
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => getInitialState('inventory', initialInventory));
+  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>(() => getInitialState('vehicleModels', []));
+  const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>(() => getInitialState('assembledVehicles', []));
+
+  useEffect(() => {
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+  }, [inventory]);
+
+  useEffect(() => {
+    localStorage.setItem('vehicleModels', JSON.stringify(vehicleModels));
+  }, [vehicleModels]);
+
+  useEffect(() => {
+    localStorage.setItem('assembledVehicles', JSON.stringify(assembledVehicles));
+  }, [assembledVehicles]);
+
+
+  const nextId = useRef(inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id))) + 1 : 1);
   const nextModelId = useRef(1);
   const nextVehicleId = useRef(1);
 
