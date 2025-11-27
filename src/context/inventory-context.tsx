@@ -20,6 +20,7 @@ interface InventoryContextType {
   getVehicleModel: (id: string) => VehicleModel | undefined;
   assembledVehicles: AssembledVehicle[];
   assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
+  deleteAssembledVehicle: (id: string) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -189,8 +190,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     addItem(assembledVehicleItem);
-
   };
+
+  const deleteAssembledVehicle = (id: string) => {
+    const vehicleToDelete = assembledVehicles.find(v => v.id === id);
+    if (!vehicleToDelete) return;
+
+    // Remove the corresponding item from the main inventory
+    setInventory(prev => prev.filter(item => item.itemStdCode !== vehicleToDelete.chassisNumber));
+    // Remove the vehicle from the assembled vehicles list
+    setAssembledVehicles(prev => prev.filter(v => v.id !== id));
+  };
+
 
   const value = useMemo(() => ({
     inventory,
@@ -207,6 +218,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     getVehicleModel,
     assembledVehicles,
     assembleVehicle,
+    deleteAssembledVehicle,
   }), [inventory, vehicleModels, assembledVehicles, getItemByStdCode]);
 
   return (

@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import type { VehicleModel } from "@/lib/types";
+import { AssembledVehiclesTable } from "@/components/assembly/assembled-vehicles-table";
 
 export default function AssemblyPage() {
   const [isSheetOpen, setSheetOpen] = useState(false);
@@ -143,9 +144,10 @@ export default function AssemblyPage() {
       />
 
       <Tabs defaultValue="assemble">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="assemble">Assemble Vehicle</TabsTrigger>
           <TabsTrigger value="models">Vehicle Models</TabsTrigger>
+          <TabsTrigger value="assembled">Assembled Vehicles</TabsTrigger>
         </TabsList>
         <TabsContent value="assemble">
           <AssembleVehicle />
@@ -229,6 +231,9 @@ export default function AssemblyPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="assembled">
+            <AssembledVehiclesTable />
         </TabsContent>
       </Tabs>
     </>
