@@ -37,6 +37,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
@@ -107,35 +110,100 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     accessorKey: "itemStatus",
     header: "Status",
     cell: function Cell({ row }) {
-      const { updateItem } = useInventory();
+      const { updateItem, splitItem } = useInventory();
       const { toast } = useToast();
       const item = row.original;
+      const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
+      const [newStatus, setNewStatus] = useState<ItemStatus | null>(null);
+      const [splitQuantity, setSplitQuantity] = useState<number | string>("");
 
-      const handleStatusChange = (newStatus: ItemStatus) => {
-        updateItem(item.id, { itemStatus: newStatus });
-        toast({
-          title: "Status Updated",
-          description: `"${item.productName}" status changed to ${newStatus}.`,
-        });
+      const handleStatusChange = (status: ItemStatus) => {
+        if (status !== item.itemStatus) {
+            if (item.quantity > 1) {
+              setNewStatus(status);
+              setSplitQuantity(1); // Default to 1
+              setIsSplitDialogOpen(true);
+            } else {
+              updateItem(item.id, { itemStatus: status });
+              toast({
+                  title: "Status Updated",
+                  description: `"${item.productName}" status changed to ${status}.`,
+              });
+            }
+        }
       };
+
+      const handleSplitSubmit = () => {
+        const qty = Number(splitQuantity);
+        if (newStatus && qty > 0 && qty <= item.quantity) {
+          splitItem(item.id, newStatus, qty);
+          toast({
+            title: "Item Split",
+            description: `${qty} units of "${item.productName}" moved to status "${newStatus}".`
+          });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Invalid Quantity',
+                description: `Quantity must be between 1 and ${item.quantity}.`
+            })
+        }
+        setIsSplitDialogOpen(false);
+        setNewStatus(null);
+        setSplitQuantity("");
+      }
       
       if (item.itemCategory === 'Assembled Vehicle') {
         return <Badge variant="default">{item.itemStatus}</Badge>;
       }
 
       return (
-        <Select onValueChange={handleStatusChange} defaultValue={item.itemStatus}>
-          <SelectTrigger className="w-[150px] text-xs h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ITEM_STATUSES.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <>
+            <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+                <Select onValueChange={handleStatusChange} value={item.itemStatus}>
+                    <SelectTrigger className="w-[150px] text-xs h-8">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {ITEM_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status} disabled={status === item.itemStatus}>
+                            {status}
+                        </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <DialogContent>
+                    <DialogHeader>
+                    <DialogTitle>Split Item Quantity</DialogTitle>
+                    <DialogDescription>
+                        Move a specific quantity of "{item.productName}" to the new status "{newStatus}". The current quantity is {item.quantity}.
+                    </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="split-quantity" className="text-right">
+                                Quantity
+                            </Label>
+                            <Input
+                                id="split-quantity"
+                                type="number"
+                                value={splitQuantity}
+                                onChange={(e) => setSplitQuantity(e.target.value)}
+                                className="col-span-3"
+                                max={item.quantity}
+                                min={1}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button type="button" onClick={handleSplitSubmit}>Confirm Split</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
       );
     },
     filterFn: (row, id, value) => {
@@ -224,3 +292,5 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     },
   },
 ];
+
+    
