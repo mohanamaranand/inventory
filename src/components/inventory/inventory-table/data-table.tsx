@@ -111,6 +111,14 @@ export function DataTable<TData extends InventoryItem, TValue>({
   };
   
   const selectedRowsContainAssembled = table.getFilteredSelectedRowModel().rows.some(row => row.original.itemCategory === 'Assembled Vehicle');
+  
+  const selectAllFilteredRows = () => {
+    const filteredRowIds = table.getFilteredRowModel().rows.reduce((acc, row) => {
+      acc[row.id] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+    table.setRowSelection(filteredRowIds);
+  };
 
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
@@ -125,6 +133,11 @@ export function DataTable<TData extends InventoryItem, TValue>({
           }
           className="max-w-sm"
         />
+        {table.getFilteredRowModel().rows.length > table.getState().pagination.pageSize && (
+          <Button variant="outline" size="sm" onClick={selectAllFilteredRows}>
+            Select All Filtered ({table.getFilteredRowModel().rows.length})
+          </Button>
+        )}
         {table.getFilteredSelectedRowModel().rows.length > 0 && (
             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
                 <AlertDialogTrigger asChild>
