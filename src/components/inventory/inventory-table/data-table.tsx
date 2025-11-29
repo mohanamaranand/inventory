@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from 'next/navigation';
 import {
   ColumnDef,
   flexRender,
@@ -62,9 +63,12 @@ export function DataTable<TData extends InventoryItem, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const searchParams = useSearchParams();
+  const statusFilterFromURL = searchParams.get('status');
+
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
+    statusFilterFromURL ? [{ id: 'itemStatus', value: statusFilterFromURL }] : []
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});

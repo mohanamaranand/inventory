@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useInventory } from "@/context/inventory-context";
@@ -46,7 +47,7 @@ export function BuildableVehicles() {
   }, [vehicleModels, assembledVehicles, getItemByStdCode]);
 
   return (
-    <Card className="shadow-md">
+    <Card className="shadow-md h-full">
       <CardHeader>
         <CardTitle>Vehicle Build Status</CardTitle>
         <CardDescription>
@@ -55,7 +56,7 @@ export function BuildableVehicles() {
       </CardHeader>
       <CardContent>
         {vehicleModels.length > 0 ? (
-          <ScrollArea className="h-48">
+          <ScrollArea className="h-[250px]">
             <div className="space-y-4">
               {vehicleStats.map((stats) => (
                 <div key={stats.modelId} className="flex items-center justify-between">
@@ -75,7 +76,7 @@ export function BuildableVehicles() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center h-[250px]">
             <Wrench className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
               No vehicle models created yet.
