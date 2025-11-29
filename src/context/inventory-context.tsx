@@ -51,21 +51,35 @@ const getInitialState = <T,>(key: string, fallback: T): T => {
   };
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => getInitialState('inventory', initialInventory));
-  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>(() => getInitialState('vehicleModels', []));
-  const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>(() => getInitialState('assembledVehicles', []));
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
+  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
+  const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('inventory', JSON.stringify(inventory));
-  }, [inventory]);
+    setInventory(getInitialState('inventory', initialInventory));
+    setVehicleModels(getInitialState('vehicleModels', []));
+    setAssembledVehicles(getInitialState('assembledVehicles', []));
+    setIsLoaded(true);
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('vehicleModels', JSON.stringify(vehicleModels));
-  }, [vehicleModels]);
+    if (isLoaded) {
+      localStorage.setItem('inventory', JSON.stringify(inventory));
+    }
+  }, [inventory, isLoaded]);
 
   useEffect(() => {
-    localStorage.setItem('assembledVehicles', JSON.stringify(assembledVehicles));
-  }, [assembledVehicles]);
+    if (isLoaded) {
+      localStorage.setItem('vehicleModels', JSON.stringify(vehicleModels));
+    }
+  }, [vehicleModels, isLoaded]);
+
+  useEffect(() => {
+    if(isLoaded) {
+      localStorage.setItem('assembledVehicles', JSON.stringify(assembledVehicles));
+    }
+  }, [assembledVehicles, isLoaded]);
 
 
   const nextId = useRef(inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id.split('-').pop() || '0'))) + 1 : 1);
