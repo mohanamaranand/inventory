@@ -41,9 +41,10 @@ import {
 import { useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, AlertTriangle } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 
 const formSchema = z.object({
   purchaseInvoiceNumber: z.string().min(1, "Purchase invoice number is required."),
@@ -60,6 +61,7 @@ const formSchema = z.object({
   unitPrice: z.coerce.number().min(0, "Unit price cannot be negative."),
   itemStatus: z.enum(ITEM_STATUSES).optional(),
   salesInvoiceNumber: z.string().optional(),
+  splitQuantity: z.coerce.number().int().min(0).optional(),
 });
 
 type InventoryFormProps = {
@@ -70,7 +72,7 @@ type InventoryFormProps = {
 };
 
 export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: InventoryFormProps) {
-  const { addItem, updateItem, getItem } = useInventory();
+  const { addItem, updateItem, getItem, splitItem } = useInventory();
   const { toast } = useToast();
   
   const editingItem = itemId ? getItem(itemId) : null;
@@ -88,12 +90,19 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         storageLocation: "",
         unitPrice: 0,
         salesInvoiceNumber: "",
+        splitQuantity: 0,
       },
   });
 
+  const watchStatus = form.watch("itemStatus");
+  const showSplit = editingItem && watchStatus && watchStatus !== editingItem.itemStatus;
+
   useEffect(() => {
     if (editingItem) {
-      form.reset(editingItem);
+      form.reset({
+        ...editingItem,
+        splitQuantity: 0,
+      });
     } else {
       form.reset({
         purchaseInvoiceNumber: "",
@@ -106,12 +115,21 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         storageLocation: "",
         unitPrice: 0,
         salesInvoiceNumber: "",
+        itemStatus: 'In Stock',
+        splitQuantity: 0,
       });
     }
   }, [editingItem, form, open]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    if (editingItem && itemId) {
+    if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
+      if (values.splitQuantity > editingItem.quantity) {
+        form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
+        return;
+      }
+      splitItem(editingItem.id, values.itemStatus!, values.splitQuantity);
+      toast({ title: "Item Split", description: `${values.splitQuantity} units of "${values.productName}" moved to status "${values.itemStatus}".` });
+    } else if (editingItem && itemId) {
       updateItem(itemId, values);
       toast({ title: "Item Updated", description: `"${values.productName}" has been updated.` });
     } else {
@@ -155,7 +173,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                     <FormItem>
                     <FormLabel>Quantity</FormLabel>
                     <FormControl>
-                        <Input type="number" placeholder="0" {...field} />
+                        <Input type="number" placeholder="0" {...field} disabled={showSplit} />
                     </FormControl>
                     <FormMessage />
                     </FormItem>
@@ -314,44 +332,68 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
               )}
             />
 
-            {editingItem && (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(editingItem || !itemId) && (
+                 <div className="space-y-4">
                     <FormField
-                    control={form.control}
-                    name="itemStatus"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Item Status</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a status" />
-                            </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                            {ITEM_STATUSES.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                {status}
-                                </SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>
-                    )}
+                      control={form.control}
+                      name="itemStatus"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Item Status</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                              <SelectTrigger>
+                                  <SelectValue placeholder="Select a status" />
+                              </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                              {ITEM_STATUSES.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                  {status}
+                                  </SelectItem>
+                              ))}
+                              </SelectContent>
+                          </Select>
+                          <FormMessage />
+                          </FormItem>
+                      )}
                     />
-                    <FormField
-                    control={form.control}
-                    name="salesInvoiceNumber"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Sales Invoice No.</FormLabel>
-                        <FormControl>
-                            <Input placeholder="e.g., SALE-2024-001" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
+                    {showSplit && (
+                      <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                        <Alert variant="default" className="border-primary/50">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertTitle>Splitting Item</AlertTitle>
+                          <AlertDescription>
+                            You have changed the status. Enter a quantity below to split that amount into a new inventory item with the new status. The original item's quantity will be reduced.
+                          </AlertDescription>
+                        </Alert>
+                        <FormField
+                            control={form.control}
+                            name="splitQuantity"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Quantity to move to new status</FormLabel>
+                                <FormControl>
+                                    <Input type="number" placeholder="0" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                      </div>
                     )}
+                    <FormField
+                      control={form.control}
+                      name="salesInvoiceNumber"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Sales Invoice No.</FormLabel>
+                          <FormControl>
+                              <Input placeholder="e.g., SALE-2024-001" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
                     />
                 </div>
             )}

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
-import { type InventoryItem, type VehicleModel, type AssembledVehicle } from "@/lib/types";
+import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus } from "@/lib/types";
 import { initialInventory } from "@/lib/data";
 
 interface InventoryContextType {
@@ -10,6 +10,7 @@ interface InventoryContextType {
   addItem: (item: Omit<InventoryItem, "id" | "itemStatus">) => void;
   addBatchItems: (items: Omit<InventoryItem, "id" | "itemStatus">[]) => void;
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
+  splitItem: (id: string, newStatus: ItemStatus, splitQuantity: number) => void;
   deleteItem: (id: string, restock?: boolean) => void;
   deleteMultipleItems: (ids: string[], restock?: boolean) => void;
   getItem: (id: string) => InventoryItem | undefined;
@@ -72,11 +73,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const nextVehicleId = useRef(assembledVehicles.length > 0 ? Math.max(...assembledVehicles.map(v => parseInt(v.id.split('-').pop() || '0'))) + 1 : 1);
 
 
-  const addItem = (item: Omit<InventoryItem, "id" | "itemStatus">) => {
+  const addItem = (item: Omit<InventoryItem, "id" | "itemStatus"> & { itemStatus?: ItemStatus }) => {
     const newItem: InventoryItem = {
       ...item,
       id: `item-${nextId.current}`,
-      itemStatus: item.quantity === 0 ? "Out of Stock" : "In Stock",
+      itemStatus: item.itemStatus || (item.quantity === 0 ? "Out of Stock" : "In Stock"),
     };
     setInventory((prev) => [newItem, ...prev]);
     nextId.current += 1;
@@ -101,6 +102,31 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     );
   };
   
+  const splitItem = (id: string, newStatus: ItemStatus, splitQuantity: number) => {
+    const itemToSplit = getItem(id);
+    if (!itemToSplit || splitQuantity <= 0 || splitQuantity > itemToSplit.quantity) {
+        return;
+    }
+
+    // Update original item
+    const updatedOriginalItem = {
+        ...itemToSplit,
+        quantity: itemToSplit.quantity - splitQuantity
+    };
+    if (updatedOriginalItem.quantity === 0) {
+        updatedOriginalItem.itemStatus = 'Out of Stock';
+    }
+    updateItem(id, updatedOriginalItem);
+    
+    // Create new item for the split part
+    const splitItem: Omit<InventoryItem, "id" | "itemStatus"> = {
+        ...itemToSplit,
+        quantity: splitQuantity,
+    };
+    addItem({ ...splitItem, itemStatus: newStatus });
+  };
+
+
   const deleteItem = (id: string, restock: boolean = false) => {
     setInventory((prev) => {
         const itemToDelete = prev.find(item => item.id === id);
@@ -206,7 +232,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         unitPrice: totalCost,
     };
 
-    addItem(assembledVehicleItem);
+    addItem({...assembledVehicleItem, itemStatus: 'Assembled' });
   };
 
   const deleteAssembledVehicle = (idOrChassis: string, restock: boolean = false, fromInventory: boolean = false) => {
@@ -251,6 +277,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     addItem,
     addBatchItems,
     updateItem,
+    splitItem,
     deleteItem,
     deleteMultipleItems,
     getItem,
