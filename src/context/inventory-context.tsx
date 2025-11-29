@@ -122,22 +122,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
-    // Update original item
+    // If moving the full quantity, just update the status of the existing item
+    if (splitQuantity === itemToSplit.quantity) {
+      updateItem(itemToSplit.id, { itemStatus: newStatus });
+      return;
+    }
+
+    // Reduce quantity of the original item
     const updatedOriginalItem = {
         ...itemToSplit,
         quantity: itemToSplit.quantity - splitQuantity
     };
-    if (updatedOriginalItem.quantity === 0) {
-        updatedOriginalItem.itemStatus = 'Out of Stock';
-    }
     updateItem(id, updatedOriginalItem);
-    
-    // Create new item for the split part
-    const splitItem: Omit<InventoryItem, "id" | "itemStatus"> = {
-        ...itemToSplit,
-        quantity: splitQuantity,
-    };
-    addItem({ ...splitItem, itemStatus: newStatus });
+
+    // Check if an item with the same std code and new status already exists
+    const existingItemWithNewStatus = inventory.find(
+      item => item.itemStdCode === itemToSplit.itemStdCode && item.itemStatus === newStatus
+    );
+
+    if (existingItemWithNewStatus) {
+      // If it exists, update its quantity
+      updateItem(existingItemWithNewStatus.id, {
+        quantity: existingItemWithNewStatus.quantity + splitQuantity,
+      });
+    } else {
+      // If not, create a new item for the split part
+      const splitPart: Omit<InventoryItem, "id" | "itemStatus"> = {
+          ...itemToSplit,
+          quantity: splitQuantity,
+      };
+      addItem({ ...splitPart, itemStatus: newStatus });
+    }
   };
 
 
@@ -270,6 +285,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 updatedItem.itemStatus = 'In Stock';
               }
               newInventory[itemIndex] = updatedItem;
+            } else {
+                // If part does not exist at all, create it.
+                // This might happen if the part was deleted from inventory after assembly.
+                // We'd need more info on what to do here. For now, we update if found.
             }
           }
           return newInventory;
@@ -319,3 +338,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
