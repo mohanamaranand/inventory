@@ -123,7 +123,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
-      if (values.splitQuantity > editingItem.quantity) {
+      if (!editingItem || values.splitQuantity > editingItem.quantity) {
         form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
         return;
       }
@@ -340,7 +340,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                       render={({ field }) => (
                           <FormItem>
                           <FormLabel>Item Status</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                               <SelectTrigger>
                                   <SelectValue placeholder="Select a status" />
