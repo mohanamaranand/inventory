@@ -51,7 +51,7 @@ const getInitialState = <T,>(key: string, fallback: T): T => {
   };
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
   const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -332,26 +332,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   if (!isLoaded) {
     return (
-        <InventoryContext.Provider value={{
-            inventory: [],
-            addItem: () => {},
-            addBatchItems: () => {},
-            updateItem: () => {},
-            splitItem: () => {},
-            deleteItem: () => {},
-            deleteMultipleItems: () => {},
-            getItem: () => undefined,
-            getItemByStdCode: () => undefined,
-            vehicleModels: [],
-            addVehicleModel: () => {},
-            updateVehicleModel: () => {},
-            getVehicleModel: () => undefined,
-            assembledVehicles: [],
-            assembleVehicle: () => {},
-            deleteAssembledVehicle: () => {},
-        }}>
-        {children}
-        </InventoryContext.Provider>
+        <div />
     );
   }
 

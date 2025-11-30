@@ -1,7 +1,8 @@
 
+
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, Suspense } from "react";
 import * as XLSX from "xlsx";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import type { VehicleModel } from "@/lib/types";
 import { AssembledVehiclesTable } from "@/components/assembly/assembled-vehicles-table";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function AssemblyPage() {
+function AssemblyPageContent() {
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const { vehicleModels, addVehicleModel, getItemByStdCode } = useInventory();
@@ -238,4 +240,17 @@ export default function AssemblyPage() {
       </Tabs>
     </>
   );
+}
+
+export default function AssemblyPage() {
+    return (
+        <Suspense fallback={
+            <>
+                <Header title="Vehicle Assembly" />
+                <Skeleton className="h-[700px] w-full" />
+            </>
+        }>
+            <AssemblyPageContent />
+        </Suspense>
+    )
 }
