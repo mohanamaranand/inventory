@@ -122,7 +122,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
-    // Check for an existing item with the same code, status, AND details
     const existingItemWithNewStatus = inventory.find(
         item => item.itemStdCode === itemToSplit.itemStdCode && 
                 item.itemStatus === newStatus &&
@@ -130,29 +129,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     );
 
     if (splitQuantity === itemToSplit.quantity) {
-        // Full quantity transfer
         if (existingItemWithNewStatus) {
-            // Merge with existing item and delete the original
             updateItem(existingItemWithNewStatus.id, {
                 quantity: existingItemWithNewStatus.quantity + splitQuantity,
             });
-            deleteItem(itemToSplit.id, false); // Use the main deleteItem function without restock
+            deleteItem(itemToSplit.id, false); 
         } else {
-            // No existing matching item, so just update the status of the current item
             updateItem(itemToSplit.id, { itemStatus: newStatus });
         }
     } else {
-        // Partial quantity split
-        // Reduce quantity of the original item
         updateItem(id, { quantity: itemToSplit.quantity - splitQuantity });
-
         if (existingItemWithNewStatus) {
-            // If it exists, update its quantity
             updateItem(existingItemWithNewStatus.id, {
                 quantity: existingItemWithNewStatus.quantity + splitQuantity,
             });
         } else {
-            // If not, create a new item for the split part
             const splitPart: Omit<InventoryItem, "id" | "itemStatus"> = {
                 ...itemToSplit,
                 quantity: splitQuantity,
@@ -166,7 +157,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteItem = (id: string, restock: boolean = false) => {
     const itemToDelete = inventory.find(item => item.id === id);
     if (itemToDelete && itemToDelete.itemCategory === 'Assembled Vehicle') {
-        // Use chassis number to find the vehicle, as the id in inventory is different
         deleteAssembledVehicle(itemToDelete.itemStdCode, restock, true);
     }
     setInventory(prev => prev.filter(item => item.id !== id));
@@ -178,7 +168,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     
     if (assembledItems.length > 0) {
         assembledItems.forEach(item => {
-            // Use chassis number from itemStdCode
             deleteAssembledVehicle(item.itemStdCode, restock, true);
         });
     }
@@ -191,7 +180,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const getItemByStdCode = useCallback((stdCode: string) => {
-    // Prefer "In Stock" items if multiple exist with same code but different statuses
     return inventory.find(item => item.itemStdCode === stdCode && item.itemStatus === "In Stock") || inventory.find(item => item.itemStdCode === stdCode);
   }, [inventory]);
 
@@ -220,7 +208,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     let totalCost = 0;
 
-    // Check if there is enough stock
     for (const part of model.parts) {
       const inventoryItem = getItemByStdCode(part.itemStdCode);
       if (!inventoryItem || inventoryItem.quantity < part.quantity) {
@@ -229,7 +216,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       totalCost += (inventoryItem.unitPrice || 0) * part.quantity;
     }
 
-    // Reduce inventory
     setInventory(prev => {
       const newInventory = [...prev];
       for (const part of model.parts) {
@@ -253,7 +239,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledVehicles(prev => [newVehicle, ...prev]);
     nextVehicleId.current += 1;
 
-    // Add assembled vehicle to inventory
     const assembledVehicleItem: Omit<InventoryItem, 'id' | 'itemStatus'> = {
         purchaseInvoiceNumber: 'ASL-' + newVehicle.id,
         vendorName: 'In-house Assembly',
@@ -291,10 +276,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 updatedItem.itemStatus = 'In Stock';
               }
               newInventory[itemIndex] = updatedItem;
-            } else {
-                // If part does not exist at all, create it.
-                // This might happen if the part was deleted from inventory after assembly.
-                // We'd need more info on what to do here. For now, we update if found.
             }
           }
           return newInventory;
@@ -302,11 +283,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     
-    // Remove the corresponding item from the main inventory if not triggered from there
     if (!fromInventory) {
         setInventory(prev => prev.filter(item => item.itemStdCode !== vehicleToDelete.chassisNumber));
     }
-    // Remove the vehicle from the assembled vehicles list
     setAssembledVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
   };
 
@@ -344,3 +323,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
