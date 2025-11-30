@@ -122,8 +122,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
+    // Check for an existing item with the same code, status, AND details
     const existingItemWithNewStatus = inventory.find(
-        item => item.itemStdCode === itemToSplit.itemStdCode && item.itemStatus === newStatus && item.id !== itemToSplit.id
+        item => item.itemStdCode === itemToSplit.itemStdCode && 
+                item.itemStatus === newStatus &&
+                item.productDetails === itemToSplit.productDetails
     );
 
     if (splitQuantity === itemToSplit.quantity) {
@@ -133,10 +136,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             updateItem(existingItemWithNewStatus.id, {
                 quantity: existingItemWithNewStatus.quantity + splitQuantity,
             });
-            // Use the main deleteItem function without restock
-            deleteItem(itemToSplit.id, false);
+            deleteItem(itemToSplit.id, false); // Use the main deleteItem function without restock
         } else {
-            // No existing item, so just update the status of the current item
+            // No existing matching item, so just update the status of the current item
             updateItem(itemToSplit.id, { itemStatus: newStatus });
         }
     } else {
