@@ -12,6 +12,7 @@ import { useState, useRef, Suspense } from "react";
 import * as XLSX from "xlsx";
 import { useToast } from "@/hooks/use-toast";
 import { ITEM_CATEGORIES, InventoryItem } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function InventoryPageContent() {
     const { inventory, addBatchItems, getItemByStdCode, updateItem } = useInventory();
@@ -162,7 +163,12 @@ function InventoryPageContent() {
 
 export default function InventoryPage() {
     return (
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={
+        <>
+            <Header title="Inventory" />
+            <Skeleton className="h-[700px] w-full" />
+        </>
+      }>
         <InventoryPageContent />
       </Suspense>
     );

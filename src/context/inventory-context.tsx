@@ -330,12 +330,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     deleteAssembledVehicle,
   }), [inventory, vehicleModels, assembledVehicles, getItemByStdCode]);
 
-  if (!isLoaded) {
-    return (
-        <div />
-    );
-  }
-
   return (
     <InventoryContext.Provider value={value}>
       {children}
