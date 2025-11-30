@@ -11,23 +11,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ItemStatus } from "@/lib/types";
+import type { ItemCategory } from "@/lib/types";
 import { Badge } from "../ui/badge";
 import Link from "next/link";
 import { List } from "lucide-react";
 
-export function StatusWidget() {
+export function CategoryWidget() {
   const { inventory } = useInventory();
 
-  const statusCounts = useMemo(() => {
+  const categoryCounts = useMemo(() => {
     const counts = inventory.reduce((acc, item) => {
-      const status = item.itemStatus || "In Stock";
-      acc[status] = (acc[status] || 0) + item.quantity;
+      const category = item.itemCategory;
+      acc[category] = (acc[category] || 0) + item.quantity;
       return acc;
-    }, {} as Record<ItemStatus, number>);
+    }, {} as Record<ItemCategory, number>);
 
-    return Object.entries(counts).map(([status, count]) => ({
-      status: status as ItemStatus,
+    return Object.entries(counts).map(([category, count]) => ({
+      category: category as ItemCategory,
       count,
     }));
   }, [inventory]);
@@ -35,22 +35,22 @@ export function StatusWidget() {
   return (
     <Card className="shadow-md h-full">
       <CardHeader>
-        <CardTitle>Inventory by Status</CardTitle>
+        <CardTitle>Inventory by Category</CardTitle>
         <CardDescription>
-          A breakdown of items by their current status.
+          A breakdown of items by their assigned category.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {statusCounts.length > 0 ? (
+        {categoryCounts.length > 0 ? (
           <ScrollArea className="h-48">
             <div className="space-y-4">
-              {statusCounts.map(({ status, count }) => (
+              {categoryCounts.map(({ category, count }) => (
                 <Link
-                  key={status}
-                  href={`/inventory?status=${encodeURIComponent(status)}`}
+                  key={category}
+                  href={`/inventory?category=${encodeURIComponent(category)}`}
                   className="flex items-center justify-between p-2 rounded-md hover:bg-muted"
                 >
-                  <p className="font-medium text-sm">{status}</p>
+                  <p className="font-medium text-sm">{category}</p>
                   <Badge variant="secondary">{count}</Badge>
                 </Link>
               ))}

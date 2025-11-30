@@ -65,11 +65,19 @@ export function DataTable<TData extends InventoryItem, TValue>({
 }: DataTableProps<TData, TValue>) {
   const searchParams = useSearchParams();
   const statusFilterFromURL = searchParams.get('status');
+  const categoryFilterFromURL = searchParams.get('category');
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    statusFilterFromURL ? [{ id: 'itemStatus', value: statusFilterFromURL }] : []
-  );
+  
+  const initialFilters: ColumnFiltersState = [];
+  if (statusFilterFromURL) {
+    initialFilters.push({ id: 'itemStatus', value: statusFilterFromURL });
+  }
+  if (categoryFilterFromURL) {
+    initialFilters.push({ id: 'itemCategory', value: categoryFilterFromURL });
+  }
+
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});

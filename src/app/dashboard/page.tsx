@@ -4,6 +4,7 @@ import { StatsCards } from "@/components/dashboard/stats-cards";
 import { AnalyticsDashboard } from "@/components/dashboard/analytics-dashboard";
 import { BuildableVehicles } from "@/components/dashboard/buildable-vehicles";
 import { StatusWidget } from "@/components/dashboard/status-widget";
+import { CategoryWidget } from "@/components/dashboard/category-widget";
 
 export default function DashboardPage() {
   return (
@@ -15,8 +16,9 @@ export default function DashboardPage() {
             <div className="lg:col-span-2">
                 <BuildableVehicles />
             </div>
-            <div className="lg:col-span-1">
+            <div className="grid grid-cols-1 gap-8">
                 <StatusWidget />
+                <CategoryWidget />
             </div>
         </div>
         <AnalyticsDashboard />
