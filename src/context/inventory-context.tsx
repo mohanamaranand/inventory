@@ -3,7 +3,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
 import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus } from "@/lib/types";
-import { initialInventory } from "@/lib/data";
 
 interface InventoryContextType {
   inventory: InventoryItem[];
@@ -51,13 +50,13 @@ const getInitialState = <T,>(key: string, fallback: T): T => {
   };
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
   const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    setInventory(getInitialState('inventory', initialInventory));
+    setInventory(getInitialState('inventory', []));
     setVehicleModels(getInitialState('vehicleModels', []));
     setAssembledVehicles(getInitialState('assembledVehicles', []));
     setIsLoaded(true);
@@ -323,5 +322,7 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
 
     
