@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, ArrowUpDown } from "lucide-react";
@@ -243,12 +244,26 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
       if (item.itemCategory === "Assembled Vehicle") {
         return (
           <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onEdit(item.id)}>
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <AlertDialogTrigger asChild>
+                    <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    Delete
+                    </DropdownMenuItem>
+                </AlertDialogTrigger>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
@@ -258,7 +273,6 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <DropdownMenuItem onClick={() => onEdit(item.id)}>Edit</DropdownMenuItem>
                 <AlertDialogAction onClick={() => handleDelete(false)}>Delete Only</AlertDialogAction>
                 <AlertDialogAction onClick={() => handleDelete(true)}>Delete & Restock</AlertDialogAction>
               </AlertDialogFooter>
@@ -292,5 +306,3 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     },
   },
 ];
-
-    
