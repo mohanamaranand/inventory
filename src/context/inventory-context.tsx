@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
-import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus, type BatteryModel, type AssembledBattery, type Customer } from "@/lib/types";
+import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus, type BatteryModel, type AssembledBattery, type Customer, SOLD_STATUSES } from "@/lib/types";
 
 interface AllData {
     inventory: InventoryItem[];
@@ -11,6 +11,17 @@ interface AllData {
     batteryModels: BatteryModel[];
     assembledBatteries: AssembledBattery[];
     customers: Customer[];
+}
+
+interface SaleData {
+    customerId: string;
+    salesInvoiceNumber: string;
+    date: Date;
+    items: {
+        itemId: string;
+        quantity: number;
+        unitPrice: number;
+    }[];
 }
 
 interface InventoryContextType extends AllData {
@@ -42,6 +53,8 @@ interface InventoryContextType extends AllData {
   updateCustomer: (id: string, updatedCustomer: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
   getCustomer: (id: string) => Customer | undefined;
+
+  processSale: (saleData: SaleData) => void;
 
   clearAllData: () => void;
   restoreAllData: (data: AllData) => void;
@@ -476,6 +489,56 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     return customers.find(customer => customer.id === id);
   }
 
+  const processSale = (saleData: SaleData) => {
+    let currentInventory = [...inventory];
+
+    // Validate sale before processing
+    for (const saleItem of saleData.items) {
+      const inventoryItem = currentInventory.find(invItem => invItem.id === saleItem.itemId);
+      if (!inventoryItem) {
+        throw new Error(`Item with ID ${saleItem.itemId} not found.`);
+      }
+      if (inventoryItem.quantity < saleItem.quantity) {
+        throw new Error(`Not enough stock for ${inventoryItem.productName}. Available: ${inventoryItem.quantity}, Requested: ${saleItem.quantity}`);
+      }
+    }
+    
+    const soldItemsToAdd: InventoryItem[] = [];
+
+    currentInventory = currentInventory.map(invItem => {
+        const saleItem = saleData.items.find(si => si.itemId === invItem.id);
+        if (!saleItem) {
+            return invItem;
+        }
+
+        const remainingQuantity = invItem.quantity - saleItem.quantity;
+        
+        // Create the sold item record
+        const soldItem: InventoryItem = {
+            ...invItem,
+            id: `item-${nextId.current}`,
+            quantity: saleItem.quantity,
+            unitPrice: saleItem.unitPrice,
+            date: saleData.date,
+            itemStatus: invItem.itemCategory === 'Assembled Vehicle' || invItem.itemCategory === 'Assembled Battery' ? 'Sold as vehicle' : 'Sold as Spare',
+            salesInvoiceNumber: saleData.salesInvoiceNumber,
+        };
+        soldItemsToAdd.push(soldItem);
+        nextId.current += 1;
+
+        // Update the original item's quantity
+        invItem.quantity = remainingQuantity;
+        if (invItem.quantity === 0) {
+            invItem.itemStatus = 'Out of Stock';
+        }
+        
+        return invItem;
+    }).filter(item => item.quantity > 0 || !SOLD_STATUSES.includes(item.itemStatus) || !saleData.items.some(si => si.itemId === item.id) ); // remove original if fully sold
+    
+    // Add the new "sold" items to inventory
+    setInventory([...currentInventory, ...soldItemsToAdd]);
+  };
+
   const clearAllData = () => {
     setInventory([]);
     setVehicleModels([]);
@@ -553,6 +616,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     updateCustomer,
     deleteCustomer,
     getCustomer,
+    processSale,
     clearAllData,
     restoreAllData
   }), [inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries, customers, getItemByStdCode]);
