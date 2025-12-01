@@ -4,8 +4,13 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
 import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus } from "@/lib/types";
 
-interface InventoryContextType {
-  inventory: InventoryItem[];
+interface AllData {
+    inventory: InventoryItem[];
+    vehicleModels: VehicleModel[];
+    assembledVehicles: AssembledVehicle[];
+}
+
+interface InventoryContextType extends AllData {
   addItem: (item: Omit<InventoryItem, "id" | "itemStatus">) => void;
   addBatchItems: (items: Omit<InventoryItem, "id" | "itemStatus">[]) => void;
   updateItem: (id: string, updatedItem: Partial<InventoryItem>) => void;
@@ -14,13 +19,13 @@ interface InventoryContextType {
   deleteMultipleItems: (ids: string[], restock?: boolean) => void;
   getItem: (id: string) => InventoryItem | undefined;
   getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
-  vehicleModels: VehicleModel[];
   addVehicleModel: (model: Omit<VehicleModel, "id">) => void;
   updateVehicleModel: (id: string, updatedModel: Partial<VehicleModel>) => void;
   getVehicleModel: (id: string) => VehicleModel | undefined;
-  assembledVehicles: AssembledVehicle[];
   assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
   deleteAssembledVehicle: (id: string, restock?: boolean) => void;
+  clearAllData: () => void;
+  restoreAllData: (data: AllData) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -288,6 +293,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
   };
 
+  const clearAllData = () => {
+    setInventory([]);
+    setVehicleModels([]);
+    setAssembledVehicles([]);
+    nextId.current = 1;
+    nextModelId.current = 1;
+    nextVehicleId.current = 1;
+  };
+
+  const restoreAllData = (data: AllData) => {
+    const sanitizedInventory = data.inventory.map(item => ({...item, date: new Date(item.date)}));
+    const sanitizedAssembled = data.assembledVehicles.map(v => ({...v, assemblyDate: new Date(v.assemblyDate)}));
+    
+    setInventory(sanitizedInventory);
+    setVehicleModels(data.vehicleModels);
+    setAssembledVehicles(sanitizedAssembled);
+    
+    // Resetting IDs based on restored data
+    const maxInvId = sanitizedInventory.length > 0 ? Math.max(...sanitizedInventory.map(i => parseInt(i.id.split('-').pop() || '0'))) : 0;
+    nextId.current = maxInvId + 1;
+
+    const maxModelId = data.vehicleModels.length > 0 ? Math.max(...data.vehicleModels.map(m => parseInt(m.id.split('-').pop() || '0'))) : 0;
+    nextModelId.current = maxModelId + 1;
+
+    const maxVehicleId = sanitizedAssembled.length > 0 ? Math.max(...sanitizedAssembled.map(v => parseInt(v.id.split('-').pop() || '0'))) : 0;
+    nextVehicleId.current = maxVehicleId + 1;
+  };
+
 
   const value = useMemo(() => ({
     inventory,
@@ -306,6 +339,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     assembledVehicles,
     assembleVehicle,
     deleteAssembledVehicle,
+    clearAllData,
+    restoreAllData
   }), [inventory, vehicleModels, assembledVehicles, getItemByStdCode]);
 
   return (
@@ -322,7 +357,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
-
-    

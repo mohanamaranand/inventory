@@ -18,6 +18,7 @@ import {
   Truck,
   Warehouse,
   Wrench,
+  Database,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,11 @@ const menuItems = [
     icon: Truck,
     label: "Restock Suggestions",
   },
+  {
+    href: "/data",
+    icon: Database,
+    label: "Data Management",
+  }
 ];
 
 export function AppSidebar() {
