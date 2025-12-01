@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
-import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus, type BatteryModel, type AssembledBattery } from "@/lib/types";
+import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus, type BatteryModel, type AssembledBattery, type Customer } from "@/lib/types";
 
 interface AllData {
     inventory: InventoryItem[];
@@ -10,6 +10,7 @@ interface AllData {
     assembledVehicles: AssembledVehicle[];
     batteryModels: BatteryModel[];
     assembledBatteries: AssembledBattery[];
+    customers: Customer[];
 }
 
 interface InventoryContextType extends AllData {
@@ -21,16 +22,27 @@ interface InventoryContextType extends AllData {
   deleteMultipleItems: (ids: string[], restock?: boolean) => void;
   getItem: (id: string) => InventoryItem | undefined;
   getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
+  
   addVehicleModel: (model: Omit<VehicleModel, "id">) => void;
   updateVehicleModel: (id: string, updatedModel: Partial<VehicleModel>) => void;
   getVehicleModel: (id: string) => VehicleModel | undefined;
+  
   assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
   deleteAssembledVehicle: (id: string, restock?: boolean) => void;
+
   addBatteryModel: (model: Omit<BatteryModel, "id">) => void;
   updateBatteryModel: (id: string, updatedModel: Partial<BatteryModel>) => void;
   getBatteryModel: (id: string) => BatteryModel | undefined;
+  
   assembleBattery: (battery: Omit<AssembledBattery, "id">) => void;
   deleteAssembledBattery: (id: string, restock?: boolean) => void;
+
+  customers: Customer[];
+  addCustomer: (customer: Omit<Customer, "id">) => void;
+  updateCustomer: (id: string, updatedCustomer: Partial<Customer>) => void;
+  deleteCustomer: (id: string) => void;
+  getCustomer: (id: string) => Customer | undefined;
+
   clearAllData: () => void;
   restoreAllData: (data: AllData) => void;
 }
@@ -71,6 +83,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
   const [batteryModels, setBatteryModels] = useState<BatteryModel[]>([]);
   const [assembledBatteries, setAssembledBatteries] = useState<AssembledBattery[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -79,38 +92,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledVehicles(getInitialState('assembledVehicles', []));
     setBatteryModels(getInitialState('batteryModels', []));
     setAssembledBatteries(getInitialState('assembledBatteries', []));
+    setCustomers(getInitialState('customers', []));
     setIsLoaded(true);
   }, []);
 
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('inventory', JSON.stringify(inventory));
-    }
-  }, [inventory, isLoaded]);
-
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('vehicleModels', JSON.stringify(vehicleModels));
-    }
-  }, [vehicleModels, isLoaded]);
-
-  useEffect(() => {
-    if(isLoaded) {
-      localStorage.setItem('assembledVehicles', JSON.stringify(assembledVehicles));
-    }
-  }, [assembledVehicles, isLoaded]);
-
-  useEffect(() => {
-    if(isLoaded) {
-        localStorage.setItem('batteryModels', JSON.stringify(batteryModels));
-    }
-    }, [batteryModels, isLoaded]);
-
-    useEffect(() => {
-    if(isLoaded) {
-        localStorage.setItem('assembledBatteries', JSON.stringify(assembledBatteries));
-    }
-  }, [assembledBatteries, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem('inventory', JSON.stringify(inventory)); }, [inventory, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem('vehicleModels', JSON.stringify(vehicleModels)); }, [vehicleModels, isLoaded]);
+  useEffect(() => { if(isLoaded) localStorage.setItem('assembledVehicles', JSON.stringify(assembledVehicles)); }, [assembledVehicles, isLoaded]);
+  useEffect(() => { if(isLoaded) localStorage.setItem('batteryModels', JSON.stringify(batteryModels)); }, [batteryModels, isLoaded]);
+  useEffect(() => { if(isLoaded) localStorage.setItem('assembledBatteries', JSON.stringify(assembledBatteries)); }, [assembledBatteries, isLoaded]);
+  useEffect(() => { if(isLoaded) localStorage.setItem('customers', JSON.stringify(customers)); }, [customers, isLoaded]);
 
 
   const nextId = useRef(1);
@@ -118,6 +109,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const nextVehicleId = useRef(1);
   const nextBatteryModelId = useRef(1);
   const nextBatteryId = useRef(1);
+  const nextCustomerId = useRef(1);
 
   useEffect(() => {
     if (isLoaded) {
@@ -135,8 +127,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
         const maxBatteryId = assembledBatteries.length > 0 ? Math.max(...assembledBatteries.map(b => parseInt(b.id.split('-').pop() || '0'))) + 1 : 1;
         nextBatteryId.current = maxBatteryId;
+        
+        const maxCustomerId = customers.length > 0 ? Math.max(...customers.map(c => parseInt(c.id.split('-').pop() || '0'))) + 1 : 1;
+        nextCustomerId.current = maxCustomerId;
     }
-  }, [isLoaded, inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries]);
+  }, [isLoaded, inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries, customers]);
 
 
   const addItem = (item: Omit<InventoryItem, "id" | "itemStatus"> & { itemStatus?: ItemStatus }) => {
@@ -458,17 +453,42 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledBatteries(prev => prev.filter(b => b.id !== batteryToDelete.id));
   };
 
+  const addCustomer = (customer: Omit<Customer, 'id'>) => {
+    const newCustomer: Customer = {
+      ...customer,
+      id: `cust-${nextCustomerId.current}`,
+    };
+    setCustomers((prev) => [newCustomer, ...prev]);
+    nextCustomerId.current += 1;
+  };
+
+  const updateCustomer = (id: string, updatedCustomer: Partial<Customer>) => {
+    setCustomers((prev) =>
+      prev.map((customer) => (customer.id === id ? { ...customer, ...updatedCustomer } : customer))
+    );
+  };
+
+  const deleteCustomer = (id: string) => {
+    setCustomers((prev) => prev.filter((customer) => customer.id !== id));
+  };
+  
+  const getCustomer = (id: string) => {
+    return customers.find(customer => customer.id === id);
+  }
+
   const clearAllData = () => {
     setInventory([]);
     setVehicleModels([]);
     setAssembledVehicles([]);
     setBatteryModels([]);
     setAssembledBatteries([]);
+    setCustomers([]);
     nextId.current = 1;
     nextModelId.current = 1;
     nextVehicleId.current = 1;
     nextBatteryModelId.current = 1;
     nextBatteryId.current = 1;
+    nextCustomerId.current = 1;
   };
 
   const restoreAllData = (data: AllData) => {
@@ -481,6 +501,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledVehicles(sanitizedAssembled);
     setBatteryModels(data.batteryModels || []);
     setAssembledBatteries(sanitizedAssembledBatteries || []);
+    setCustomers(data.customers || []);
     
     // Resetting IDs based on restored data
     const maxInvId = sanitizedInventory.length > 0 ? Math.max(...sanitizedInventory.map(i => parseInt(i.id.split('-').pop() || '0'))) : 0;
@@ -497,6 +518,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const maxBatteryId = sanitizedAssembledBatteries?.length > 0 ? Math.max(...sanitizedAssembledBatteries.map(b => parseInt(b.id.split('-').pop() || '0'))) : 0;
     nextBatteryId.current = maxBatteryId + 1;
+
+    const maxCustId = data.customers?.length > 0 ? Math.max(...data.customers.map(c => parseInt(c.id.split('-').pop() || '0'))) : 0;
+    nextCustomerId.current = maxCustId + 1;
   };
 
 
@@ -524,9 +548,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     assembledBatteries,
     assembleBattery,
     deleteAssembledBattery,
+    customers,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    getCustomer,
     clearAllData,
     restoreAllData
-  }), [inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries, getItemByStdCode]);
+  }), [inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries, customers, getItemByStdCode]);
 
   return (
     <InventoryContext.Provider value={value}>

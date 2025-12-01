@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -20,6 +21,7 @@ import {
   Wrench,
   Database,
   ShoppingCart,
+  Users,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,11 @@ const menuItems = [
     href: "/inventory",
     icon: Boxes,
     label: "Inventory",
+  },
+  {
+    href: "/customers",
+    icon: Users,
+    label: "Customers",
   },
   {
     href: "/sales",

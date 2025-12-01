@@ -1,3 +1,4 @@
+
 export const ITEM_CATEGORIES = [
   'Vehicle Part',
   'Battery Part',
@@ -86,4 +87,13 @@ export interface AssembledBattery {
     modelId: string;
     serialNumber: string;
     assemblyDate: Date;
+}
+
+export interface Customer {
+    id: string;
+    name: string;
+    contactPerson: string;
+    phone: string;
+    email: string;
+    address: string;
 }
