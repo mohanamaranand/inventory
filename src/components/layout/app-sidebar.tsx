@@ -19,6 +19,7 @@ import {
   Warehouse,
   Wrench,
   Database,
+  ShoppingCart,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,11 @@ const menuItems = [
     href: "/inventory",
     icon: Boxes,
     label: "Inventory",
+  },
+  {
+    href: "/sales",
+    icon: ShoppingCart,
+    label: "Sales",
   },
   {
     href: "/assembly",

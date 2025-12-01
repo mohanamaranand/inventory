@@ -28,6 +28,8 @@ export const ITEM_STATUSES = [
   'Returned',
 ] as const;
 
+export const SOLD_STATUSES = ['Sold as Spare', 'Sold as vehicle'] as const;
+
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
