@@ -55,7 +55,7 @@ export function BuildableVehicles() {
       </CardHeader>
       <CardContent>
         {vehicleModels.length > 0 ? (
-          <ScrollArea className="max-h-[250px]">
+          <ScrollArea className="h-[250px]">
             <div className="space-y-4 pr-6">
               {vehicleStats.map((stats) => (
                 <div key={stats.modelId} className="flex items-center justify-between">
