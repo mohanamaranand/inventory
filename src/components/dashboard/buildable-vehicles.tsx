@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Wrench, CheckCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export function BuildableVehicles() {
   const { vehicleModels, getItemByStdCode, assembledVehicles } = useInventory();
@@ -56,8 +55,8 @@ export function BuildableVehicles() {
       </CardHeader>
       <CardContent>
         {vehicleModels.length > 0 ? (
-          <ScrollArea className="h-[250px]">
-            <div className="space-y-4">
+          <ScrollArea className="max-h-[250px]">
+            <div className="space-y-4 pr-6">
               {vehicleStats.map((stats) => (
                 <div key={stats.modelId} className="flex items-center justify-between">
                   <p className="font-medium">{stats.modelName}</p>
@@ -76,7 +75,7 @@ export function BuildableVehicles() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center h-[250px]">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center min-h-[250px]">
             <Wrench className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
               No vehicle models created yet.
