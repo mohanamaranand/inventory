@@ -32,6 +32,7 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useRouter } from 'next/navigation';
+import { useMemo } from "react";
 
 const saleItemSchema = z.object({
   itemId: z.string().min(1, "Please select an item."),
@@ -51,8 +52,6 @@ export function CreateSaleForm() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const availableInventory = inventory.filter(item => (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') && item.quantity > 0);
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -67,6 +66,16 @@ export function CreateSaleForm() {
     control: form.control,
     name: "items",
   });
+  
+  const watchedItems = form.watch("items");
+  const selectedItemIds = useMemo(() => new Set(watchedItems.map(item => item.itemId)), [watchedItems]);
+
+  const availableInventory = useMemo(() => 
+    inventory.filter(item => 
+        (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') 
+        && item.quantity > 0
+    ), [inventory]);
+
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -189,6 +198,7 @@ export function CreateSaleForm() {
                    const selectedItemId = form.watch(`items.${index}.itemId`);
                    const selectedItem = inventory.find(i => i.id === selectedItemId);
                    const maxQuantity = selectedItem?.quantity ?? 0;
+                   const filteredInventoryForThisRow = availableInventory.filter(item => !selectedItemIds.has(item.id) || item.id === selectedItemId);
                   return (
                     <div key={field.id} className="grid grid-cols-[1fr_120px_120px_auto] items-end gap-2 p-3 border rounded-md">
                       <FormField
@@ -223,7 +233,7 @@ export function CreateSaleForm() {
                                   <CommandList>
                                     <CommandEmpty>No product found.</CommandEmpty>
                                     <CommandGroup>
-                                      {availableInventory.map((item) => (
+                                      {filteredInventoryForThisRow.map((item) => (
                                         <CommandItem
                                           value={`${item.productName} ${item.itemStdCode} ${item.itemCategory === 'Assembled Vehicle' ? item.productDetails : ''}`}
                                           key={item.id}
