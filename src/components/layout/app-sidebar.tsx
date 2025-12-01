@@ -9,9 +9,6 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarTrigger,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
@@ -26,6 +23,7 @@ import {
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 const menuItems = [
   {
@@ -82,7 +80,9 @@ export function AppSidebar() {
             <Warehouse className="size-6 shrink-0 text-primary" />
             <span className="text-lg font-semibold">StockPilot</span>
           </div>
-          {!isMobile && <SidebarTrigger />}
+          <div className="flex items-center">
+            <NotificationBell />
+          </div>
         </div>
       </SidebarHeader>
       <SidebarMenu className="flex-1">
@@ -102,9 +102,6 @@ export function AppSidebar() {
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
-      <SidebarFooter>
-        {/* Can add user profile or settings here */}
-      </SidebarFooter>
     </Sidebar>
   );
 }
