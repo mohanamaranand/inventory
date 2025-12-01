@@ -46,6 +46,7 @@ export interface InventoryItem {
   itemStatus: ItemStatus;
   salesInvoiceNumber?: string;
   salesData?: { date: string; quantitySold: number }[];
+  imageUrl?: string;
 }
 
 export interface VehiclePart {

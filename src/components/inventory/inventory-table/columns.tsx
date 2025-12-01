@@ -2,6 +2,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,10 +90,22 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     },
     cell: ({ row }) => {
       const item = row.original;
+      const imageUrl = item.imageUrl || `https://picsum.photos/seed/${item.itemStdCode}/40/40`;
+      
       return (
-        <div className="flex flex-col">
-          <span className="font-medium">{item.productName}</span>
-          <span className="text-xs text-muted-foreground">{item.itemStdCode}</span>
+        <div className="flex items-center gap-3">
+            <Image
+                src={imageUrl}
+                alt={item.productName}
+                width={40}
+                height={40}
+                className="rounded-md object-cover"
+                data-ai-hint="product image"
+            />
+          <div className="flex flex-col">
+            <span className="font-medium">{item.productName}</span>
+            <span className="text-xs text-muted-foreground">{item.itemStdCode}</span>
+          </div>
         </div>
       );
     },
@@ -229,7 +242,6 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
       const { deleteItem } = useInventory();
       const { toast } = useToast();
       const item = row.original;
-      const [dialogOpen, setDialogOpen] = useState(false);
 
       const handleDelete = (restock: boolean) => {
         deleteItem(item.id, restock);
@@ -238,12 +250,11 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           title: "Item Deleted",
           description: `"${item.productName}" has been removed from inventory.`,
         });
-        setDialogOpen(false);
       };
-
-      if (item.itemCategory === "Assembled Vehicle") {
+      
+      if (item.itemCategory === "Assembled Vehicle" || item.itemCategory === "Assembled Battery") {
         return (
-          <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <AlertDialog>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -266,9 +277,9 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
             </DropdownMenu>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
+                <AlertDialogTitle>Delete Assembled Item?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Do you want to restock the parts from this vehicle back into inventory, or just delete the vehicle record?
+                  Do you want to restock the parts from this item back into inventory, or just delete the record?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

@@ -45,17 +45,17 @@ export function DataManagement() {
   const handleDownload = () => {
     const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
         ...item,
-        date: item.date.toISOString().split('T')[0], // Format date for Excel
+        date: item.date instanceof Date ? item.date.toISOString().split('T')[0] : item.date, // Format date for Excel
     })));
     const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels);
     const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({
         ...v,
-        assemblyDate: v.assemblyDate.toISOString().split('T')[0],
+        assemblyDate: v.assemblyDate instanceof Date ? v.assemblyDate.toISOString().split('T')[0] : v.assemblyDate,
     })));
     const batteryModelsSheet = XLSX.utils.json_to_sheet(batteryModels);
     const assembledBatteriesSheet = XLSX.utils.json_to_sheet(assembledBatteries.map(b => ({
         ...b,
-        assemblyDate: b.assemblyDate.toISOString().split('T')[0],
+        assemblyDate: b.assemblyDate instanceof Date ? b.assemblyDate.toISOString().split('T')[0] : b.assemblyDate,
     })));
 
 

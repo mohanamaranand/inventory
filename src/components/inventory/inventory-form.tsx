@@ -62,6 +62,7 @@ const formSchema = z.object({
   itemStatus: z.enum(ITEM_STATUSES).optional(),
   salesInvoiceNumber: z.string().optional(),
   splitQuantity: z.coerce.number().int().min(0).optional(),
+  imageUrl: z.string().url().optional().or(z.literal('')),
 });
 
 type InventoryFormProps = {
@@ -91,6 +92,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         unitPrice: 0,
         salesInvoiceNumber: "",
         splitQuantity: 0,
+        imageUrl: "",
       },
   });
 
@@ -117,6 +119,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         salesInvoiceNumber: "",
         itemStatus: 'In Stock',
         splitQuantity: 0,
+        imageUrl: "",
       });
     }
   }, [editingItem, form, open]);
@@ -246,7 +249,19 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 )}
               />
             </div>
-
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Image URL</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://example.com/image.png" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="storageLocation"
