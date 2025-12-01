@@ -2,12 +2,14 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useCallback, useEffect } from "react";
-import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus } from "@/lib/types";
+import { type InventoryItem, type VehicleModel, type AssembledVehicle, type ItemStatus, type BatteryModel, type AssembledBattery } from "@/lib/types";
 
 interface AllData {
     inventory: InventoryItem[];
     vehicleModels: VehicleModel[];
     assembledVehicles: AssembledVehicle[];
+    batteryModels: BatteryModel[];
+    assembledBatteries: AssembledBattery[];
 }
 
 interface InventoryContextType extends AllData {
@@ -24,6 +26,11 @@ interface InventoryContextType extends AllData {
   getVehicleModel: (id: string) => VehicleModel | undefined;
   assembleVehicle: (vehicle: Omit<AssembledVehicle, "id">) => void;
   deleteAssembledVehicle: (id: string, restock?: boolean) => void;
+  addBatteryModel: (model: Omit<BatteryModel, "id">) => void;
+  updateBatteryModel: (id: string, updatedModel: Partial<BatteryModel>) => void;
+  getBatteryModel: (id: string) => BatteryModel | undefined;
+  assembleBattery: (battery: Omit<AssembledBattery, "id">) => void;
+  deleteAssembledBattery: (id: string, restock?: boolean) => void;
   clearAllData: () => void;
   restoreAllData: (data: AllData) => void;
 }
@@ -46,6 +53,10 @@ const getInitialState = <T,>(key: string, fallback: T): T => {
             const parsed = JSON.parse(item);
             return parsed.map((v: any) => ({...v, assemblyDate: new Date(v.assemblyDate)}));
         }
+         if (key === 'assembledBatteries') {
+            const parsed = JSON.parse(item);
+            return parsed.map((b: any) => ({...b, assemblyDate: new Date(b.assemblyDate)}));
+        }
         return JSON.parse(item);
       }
     } catch (error) {
@@ -58,12 +69,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
   const [assembledVehicles, setAssembledVehicles] = useState<AssembledVehicle[]>([]);
+  const [batteryModels, setBatteryModels] = useState<BatteryModel[]>([]);
+  const [assembledBatteries, setAssembledBatteries] = useState<AssembledBattery[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     setInventory(getInitialState('inventory', []));
     setVehicleModels(getInitialState('vehicleModels', []));
     setAssembledVehicles(getInitialState('assembledVehicles', []));
+    setBatteryModels(getInitialState('batteryModels', []));
+    setAssembledBatteries(getInitialState('assembledBatteries', []));
     setIsLoaded(true);
   }, []);
 
@@ -85,10 +100,43 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [assembledVehicles, isLoaded]);
 
+  useEffect(() => {
+    if(isLoaded) {
+        localStorage.setItem('batteryModels', JSON.stringify(batteryModels));
+    }
+    }, [batteryModels, isLoaded]);
 
-  const nextId = useRef(inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id.split('-').pop() || '0'))) + 1 : 1);
-  const nextModelId = useRef(vehicleModels.length > 0 ? Math.max(...vehicleModels.map(m => parseInt(m.id.split('-').pop() || '0'))) + 1 : 1);
-  const nextVehicleId = useRef(assembledVehicles.length > 0 ? Math.max(...assembledVehicles.map(v => parseInt(v.id.split('-').pop() || '0'))) + 1 : 1);
+    useEffect(() => {
+    if(isLoaded) {
+        localStorage.setItem('assembledBatteries', JSON.stringify(assembledBatteries));
+    }
+  }, [assembledBatteries, isLoaded]);
+
+
+  const nextId = useRef(1);
+  const nextModelId = useRef(1);
+  const nextVehicleId = useRef(1);
+  const nextBatteryModelId = useRef(1);
+  const nextBatteryId = useRef(1);
+
+  useEffect(() => {
+    if (isLoaded) {
+        const maxId = inventory.length > 0 ? Math.max(...inventory.map(i => parseInt(i.id.split('-').pop() || '0'))) + 1 : 1;
+        nextId.current = maxId;
+
+        const maxModelId = vehicleModels.length > 0 ? Math.max(...vehicleModels.map(m => parseInt(m.id.split('-').pop() || '0'))) + 1 : 1;
+        nextModelId.current = maxModelId;
+
+        const maxVehicleId = assembledVehicles.length > 0 ? Math.max(...assembledVehicles.map(v => parseInt(v.id.split('-').pop() || '0'))) + 1 : 1;
+        nextVehicleId.current = maxVehicleId;
+        
+        const maxBatteryModelId = batteryModels.length > 0 ? Math.max(...batteryModels.map(m => parseInt(m.id.split('-').pop() || '0'))) + 1 : 1;
+        nextBatteryModelId.current = maxBatteryModelId;
+
+        const maxBatteryId = assembledBatteries.length > 0 ? Math.max(...assembledBatteries.map(b => parseInt(b.id.split('-').pop() || '0'))) + 1 : 1;
+        nextBatteryId.current = maxBatteryId;
+    }
+  }, [isLoaded, inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries]);
 
 
   const addItem = (item: Omit<InventoryItem, "id" | "itemStatus"> & { itemStatus?: ItemStatus }) => {
@@ -160,19 +208,29 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteItem = (id: string, restock: boolean = false) => {
     const itemToDelete = inventory.find(item => item.id === id);
-    if (itemToDelete && itemToDelete.itemCategory === 'Assembled Vehicle') {
-        deleteAssembledVehicle(itemToDelete.itemStdCode, restock, true);
+    if (itemToDelete) {
+        if (itemToDelete.itemCategory === 'Assembled Vehicle') {
+            deleteAssembledVehicle(itemToDelete.itemStdCode, restock, true);
+        } else if (itemToDelete.itemCategory === 'Assembled Battery') {
+            deleteAssembledBattery(itemToDelete.itemStdCode, restock, true);
+        }
     }
     setInventory(prev => prev.filter(item => item.id !== id));
   };
   
   const deleteMultipleItems = (ids: string[], restock: boolean = false) => {
     const itemsToDelete = inventory.filter(item => ids.includes(item.id));
-    const assembledItems = itemsToDelete.filter(item => item.itemCategory === 'Assembled Vehicle');
+    const assembledVehicles = itemsToDelete.filter(item => item.itemCategory === 'Assembled Vehicle');
+    const assembledBatteries = itemsToDelete.filter(item => item.itemCategory === 'Assembled Battery');
     
-    if (assembledItems.length > 0) {
-        assembledItems.forEach(item => {
+    if (assembledVehicles.length > 0) {
+        assembledVehicles.forEach(item => {
             deleteAssembledVehicle(item.itemStdCode, restock, true);
+        });
+    }
+    if (assembledBatteries.length > 0) {
+        assembledBatteries.forEach(item => {
+            deleteAssembledBattery(item.itemStdCode, restock, true);
         });
     }
 
@@ -293,22 +351,136 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setAssembledVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
   };
 
+
+  const addBatteryModel = (model: Omit<BatteryModel, "id">) => {
+    const newModel: BatteryModel = {
+      ...model,
+      id: `batt-model-${nextBatteryModelId.current}`,
+    };
+    setBatteryModels(prev => [newModel, ...prev]);
+    nextBatteryModelId.current += 1;
+  };
+
+  const updateBatteryModel = (id: string, updatedModel: Partial<BatteryModel>) => {
+    setBatteryModels(prev => prev.map(model => model.id === id ? { ...model, ...updatedModel } : model));
+  };
+
+  const getBatteryModel = (id: string) => {
+    return batteryModels.find(model => model.id === id);
+  };
+
+  const assembleBattery = (battery: Omit<AssembledBattery, "id">) => {
+    const model = getBatteryModel(battery.modelId);
+    if (!model) {
+      throw new Error("Battery model not found");
+    }
+
+    let totalCost = 0;
+
+    for (const part of model.parts) {
+      const inventoryItem = getItemByStdCode(part.itemStdCode);
+      if (!inventoryItem || inventoryItem.quantity < part.quantity) {
+        throw new Error(`Not enough stock for ${inventoryItem?.productName || part.itemStdCode}`);
+      }
+      totalCost += (inventoryItem.unitPrice || 0) * part.quantity;
+    }
+
+    setInventory(prev => {
+      const newInventory = [...prev];
+      for (const part of model.parts) {
+        const itemIndex = newInventory.findIndex(i => i.itemStdCode === part.itemStdCode);
+        if (itemIndex > -1) {
+          const updatedItem = { ...newInventory[itemIndex] };
+          updatedItem.quantity -= part.quantity;
+          if(updatedItem.quantity === 0) {
+            updatedItem.itemStatus = 'Out of Stock';
+          }
+          newInventory[itemIndex] = updatedItem;
+        }
+      }
+      return newInventory;
+    });
+
+    const newBattery: AssembledBattery = {
+      ...battery,
+      id: `battery-${nextBatteryId.current}`,
+    };
+    setAssembledBatteries(prev => [newBattery, ...prev]);
+    nextBatteryId.current += 1;
+
+    const assembledBatteryItem: Omit<InventoryItem, 'id' | 'itemStatus'> = {
+        purchaseInvoiceNumber: 'ASL-' + newBattery.id,
+        vendorName: 'In-house Assembly',
+        date: battery.assemblyDate,
+        itemStdCode: battery.serialNumber,
+        itemCategory: 'Assembled Battery',
+        productName: model.name,
+        productDetails: `Assembled battery with Serial No: ${battery.serialNumber}`,
+        quantity: 1,
+        storageLocation: 'Battery Storage',
+        unitPrice: totalCost,
+    };
+
+    addItem({...assembledBatteryItem, itemStatus: 'Assembled' });
+  };
+  
+  const deleteAssembledBattery = (idOrSerial: string, restock: boolean = false, fromInventory: boolean = false) => {
+    const batteryToDelete = fromInventory
+        ? assembledBatteries.find(b => b.serialNumber === idOrSerial)
+        : assembledBatteries.find(b => b.id === idOrSerial);
+
+    if (!batteryToDelete) return;
+
+    if (restock) {
+      const model = getBatteryModel(batteryToDelete.modelId);
+      if (model) {
+        setInventory(prev => {
+          const newInventory = [...prev];
+          for (const part of model.parts) {
+            const itemIndex = newInventory.findIndex(i => i.itemStdCode === part.itemStdCode);
+            if (itemIndex > -1) {
+              const updatedItem = { ...newInventory[itemIndex] };
+              updatedItem.quantity += part.quantity;
+              if (updatedItem.itemStatus === 'Out of Stock') {
+                updatedItem.itemStatus = 'In Stock';
+              }
+              newInventory[itemIndex] = updatedItem;
+            }
+          }
+          return newInventory;
+        });
+      }
+    }
+    
+    if (!fromInventory) {
+        setInventory(prev => prev.filter(item => item.itemStdCode !== batteryToDelete.serialNumber));
+    }
+    setAssembledBatteries(prev => prev.filter(b => b.id !== batteryToDelete.id));
+  };
+
   const clearAllData = () => {
     setInventory([]);
     setVehicleModels([]);
     setAssembledVehicles([]);
+    setBatteryModels([]);
+    setAssembledBatteries([]);
     nextId.current = 1;
     nextModelId.current = 1;
     nextVehicleId.current = 1;
+    nextBatteryModelId.current = 1;
+    nextBatteryId.current = 1;
   };
 
   const restoreAllData = (data: AllData) => {
     const sanitizedInventory = data.inventory.map(item => ({...item, date: new Date(item.date)}));
     const sanitizedAssembled = data.assembledVehicles.map(v => ({...v, assemblyDate: new Date(v.assemblyDate)}));
+    const sanitizedAssembledBatteries = data.assembledBatteries.map(b => ({...b, assemblyDate: new Date(b.assemblyDate)}));
     
     setInventory(sanitizedInventory);
     setVehicleModels(data.vehicleModels);
     setAssembledVehicles(sanitizedAssembled);
+    setBatteryModels(data.batteryModels || []);
+    setAssembledBatteries(sanitizedAssembledBatteries || []);
     
     // Resetting IDs based on restored data
     const maxInvId = sanitizedInventory.length > 0 ? Math.max(...sanitizedInventory.map(i => parseInt(i.id.split('-').pop() || '0'))) : 0;
@@ -319,6 +491,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
     const maxVehicleId = sanitizedAssembled.length > 0 ? Math.max(...sanitizedAssembled.map(v => parseInt(v.id.split('-').pop() || '0'))) : 0;
     nextVehicleId.current = maxVehicleId + 1;
+
+    const maxBatteryModelId = data.batteryModels?.length > 0 ? Math.max(...data.batteryModels.map(m => parseInt(m.id.split('-').pop() || '0'))) : 0;
+    nextBatteryModelId.current = maxBatteryModelId + 1;
+
+    const maxBatteryId = sanitizedAssembledBatteries?.length > 0 ? Math.max(...sanitizedAssembledBatteries.map(b => parseInt(b.id.split('-').pop() || '0'))) : 0;
+    nextBatteryId.current = maxBatteryId + 1;
   };
 
 
@@ -339,13 +517,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     assembledVehicles,
     assembleVehicle,
     deleteAssembledVehicle,
+    batteryModels,
+    addBatteryModel,
+    updateBatteryModel,
+    getBatteryModel,
+    assembledBatteries,
+    assembleBattery,
+    deleteAssembledBattery,
     clearAllData,
     restoreAllData
-  }), [inventory, vehicleModels, assembledVehicles, getItemByStdCode]);
+  }), [inventory, vehicleModels, assembledVehicles, batteryModels, assembledBatteries, getItemByStdCode]);
 
   return (
     <InventoryContext.Provider value={value}>
-      {children}
+      {isLoaded ? children : null}
     </InventoryContext.Provider>
   );
 };

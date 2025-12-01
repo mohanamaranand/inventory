@@ -1,15 +1,16 @@
 export const ITEM_CATEGORIES = [
   'Vehicle Part',
+  'Battery Part',
   'Spare',
   'Accessories',
   'Tools',
   'Machinery',
-  'Battery Part',
   'Solar Part',
   'Electrical Part',
   'Showroom Part',
   'Solar Material',
   'Assembled Vehicle',
+  'Assembled Battery',
   'Non Business Items',
   'Other Business Items',
 ] as const;
@@ -64,4 +65,22 @@ export interface AssembledVehicle {
   chassisNumber: string;
   motorNumber: string;
   assemblyDate: Date;
+}
+
+export interface BatteryPart {
+    itemStdCode: string;
+    quantity: number;
+}
+
+export interface BatteryModel {
+    id: string;
+    name: string;
+    parts: BatteryPart[];
+}
+
+export interface AssembledBattery {
+    id: string;
+    modelId: string;
+    serialNumber: string;
+    assemblyDate: Date;
 }
