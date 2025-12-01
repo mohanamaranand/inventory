@@ -26,7 +26,7 @@ import { useInventory } from "@/context/inventory-context";
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, ShoppingCart, Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
@@ -51,7 +51,7 @@ export function CreateSaleForm() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const availableInventory = inventory.filter(item => item.itemStatus === 'In Stock' && item.quantity > 0);
+  const availableInventory = inventory.filter(item => (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') && item.quantity > 0);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -220,28 +220,30 @@ export function CreateSaleForm() {
                               <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                 <Command>
                                   <CommandInput placeholder="Search product..." />
-                                  <CommandEmpty>No product found.</CommandEmpty>
-                                  <CommandGroup>
-                                    {availableInventory.map((item) => (
-                                      <CommandItem
-                                        value={`${item.productName} ${item.itemStdCode}`}
-                                        key={item.id}
-                                        onSelect={() => {
-                                          handleItemChange(item.id, index);
-                                        }}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            item.id === formField.value
-                                              ? "opacity-100"
-                                              : "opacity-0"
-                                          )}
-                                        />
-                                        <span>{item.productName} ({item.itemStdCode}) - Stock: {item.quantity}</span>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
+                                  <CommandList>
+                                    <CommandEmpty>No product found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {availableInventory.map((item) => (
+                                        <CommandItem
+                                          value={`${item.productName} ${item.itemStdCode} ${item.itemCategory === 'Assembled Vehicle' ? item.productDetails : ''}`}
+                                          key={item.id}
+                                          onSelect={() => {
+                                            handleItemChange(item.id, index);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              item.id === formField.value
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            )}
+                                          />
+                                          <span>{item.productName} ({item.itemStdCode}) - Stock: {item.quantity}</span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
                                 </Command>
                               </PopoverContent>
                             </Popover>

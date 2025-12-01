@@ -526,14 +526,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         soldItemsToAdd.push(soldItem);
         nextId.current += 1;
 
-        // Update the original item's quantity
-        invItem.quantity = remainingQuantity;
-        if (invItem.quantity === 0) {
-            invItem.itemStatus = 'Out of Stock';
+        if (remainingQuantity > 0) {
+            return { ...invItem, quantity: remainingQuantity };
+        } else {
+            // This item is fully sold, so it shouldn't be in the 'In Stock' list anymore.
+            // We return null and filter it out later.
+            return null;
         }
-        
-        return invItem;
-    }).filter(item => item.quantity > 0 || !SOLD_STATUSES.includes(item.itemStatus) || !saleData.items.some(si => si.itemId === item.id) ); // remove original if fully sold
+    }).filter(Boolean) as InventoryItem[]; // Filter out null items
     
     // Add the new "sold" items to inventory
     setInventory([...currentInventory, ...soldItemsToAdd]);
