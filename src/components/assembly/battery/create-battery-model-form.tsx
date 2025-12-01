@@ -59,7 +59,7 @@ export function CreateBatteryModelForm({
   onFormSubmit,
   modelId,
 }: CreateBatteryModelFormProps) {
-  const { addBatteryModel, updateBatteryModel, getBatteryModel, inventory } = useInventory();
+  const { addBatteryModel, updateBatteryModel, getBatteryModel, inventory, batteryModels } = useInventory();
   const { toast } = useToast();
 
   const batteryParts = useMemo(
@@ -107,6 +107,19 @@ export function CreateBatteryModelForm({
         });
         return;
       }
+    }
+    
+    // Check for duplicate model name
+    const isNameTaken = batteryModels.some(
+        (model) => model.name.toLowerCase() === values.name.toLowerCase() && model.id !== modelId
+    );
+
+    if (isNameTaken) {
+        form.setError("name", {
+            type: "manual",
+            message: "A model with this name already exists.",
+        });
+        return;
     }
 
     if (editingModel && modelId) {

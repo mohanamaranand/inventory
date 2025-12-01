@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -58,7 +59,7 @@ export function CreateModelForm({
   onFormSubmit,
   modelId,
 }: CreateModelFormProps) {
-  const { addVehicleModel, updateVehicleModel, getVehicleModel, inventory } =
+  const { addVehicleModel, updateVehicleModel, getVehicleModel, inventory, vehicleModels } =
     useInventory();
   const { toast } = useToast();
 
@@ -108,6 +109,20 @@ export function CreateModelForm({
         return;
       }
     }
+    
+    // Check for duplicate model name
+    const isNameTaken = vehicleModels.some(
+        (model) => model.name.toLowerCase() === values.name.toLowerCase() && model.id !== modelId
+    );
+
+    if (isNameTaken) {
+        form.setError("name", {
+            type: "manual",
+            message: "A model with this name already exists.",
+        });
+        return;
+    }
+
 
     if (editingModel && modelId) {
       updateVehicleModel(modelId, values);
