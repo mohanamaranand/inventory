@@ -544,7 +544,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setVehicleModels([]);
     setAssembledVehicles([]);
     setBatteryModels([]);
-    setAssembledBatteries([]);
     setCustomers([]);
     nextId.current = 1;
     nextModelId.current = 1;
@@ -635,3 +634,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
