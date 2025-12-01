@@ -22,6 +22,7 @@ import {
   Database,
   ShoppingCart,
   Users,
+  ClipboardList,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,11 @@ const menuItems = [
     href: "/restock",
     icon: Truck,
     label: "Restock Suggestions",
+  },
+  {
+      href: "/reports",
+      icon: ClipboardList,
+      label: "Reports"
   },
   {
     href: "/data",
