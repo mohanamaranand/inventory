@@ -16,17 +16,17 @@ function DashboardPageContent() {
             <div className="space-y-8">
                 <StatsCards />
                 <div className="grid gap-8 lg:grid-cols-3">
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-8">
                         <SalesPurchasesChart />
+                        <div className="grid gap-8 md:grid-cols-2">
+                            <BuildableVehicles />
+                            <StatusWidget />
+                        </div>
                     </div>
                     <div className="space-y-8">
                         <AssembledSummary />
                         <CategoryWidget />
                     </div>
-                </div>
-                 <div className="grid gap-8 md:grid-cols-2">
-                    <BuildableVehicles />
-                    <StatusWidget />
                 </div>
             </div>
         </>
@@ -53,17 +53,17 @@ function DashboardLoadingSkeleton() {
                 <Skeleton className="h-28" />
             </div>
              <div className="grid gap-8 lg:grid-cols-3">
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 space-y-8">
                     <Skeleton className="h-80" />
+                     <div className="grid gap-8 md:grid-cols-2">
+                        <Skeleton className="h-64" />
+                        <Skeleton className="h-64" />
+                    </div>
                 </div>
                 <div className="space-y-8">
                     <Skeleton className="h-40" />
                     <Skeleton className="h-40" />
                 </div>
-            </div>
-            <div className="grid gap-8 md:grid-cols-2">
-                <Skeleton className="h-64" />
-                <Skeleton className="h-64" />
             </div>
         </div>
     );
