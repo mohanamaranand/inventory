@@ -194,7 +194,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             updateItem(existingItemWithNewStatus.id, {
                 quantity: existingItemWithNewStatus.quantity + splitQuantity,
             });
-            deleteItem(itemToSplit.id, false); 
+            // Directly filter out the item to be deleted
+            setInventory(prev => prev.filter(item => item.id !== itemToSplit.id));
         } else {
             updateItem(itemToSplit.id, { itemStatus: newStatus });
         }
@@ -635,5 +636,7 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
 
     
