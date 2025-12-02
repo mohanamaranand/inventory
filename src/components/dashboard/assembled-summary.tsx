@@ -57,7 +57,7 @@ export function AssembledSummary() {
       </CardHeader>
       <CardContent>
         {assemblyStats.length > 0 ? (
-          <ScrollArea className="h-[150px] pr-4">
+          <ScrollArea className="pr-4">
             <div className="space-y-4">
               {assemblyStats.map((stats, index) => (
                 <div key={index} className="flex items-center justify-between text-sm">
@@ -77,7 +77,7 @@ export function AssembledSummary() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center min-h-[150px]">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center h-full p-4">
             <CheckCircle className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-4 text-sm font-medium">No Assembled Products</p>
             <p className="text-xs text-muted-foreground">
