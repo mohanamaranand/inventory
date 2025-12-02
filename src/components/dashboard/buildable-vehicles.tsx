@@ -12,73 +12,73 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Wrench, CheckCircle } from "lucide-react";
+import { Separator } from "../ui/separator";
 
 export function BuildableVehicles() {
-  const { vehicleModels, getItemByStdCode, assembledVehicles } = useInventory();
+  const { vehicleModels, batteryModels, getItemByStdCode } = useInventory();
 
-  const vehicleStats = useMemo(() => {
-    const assembledCounts = assembledVehicles.reduce((acc, vehicle) => {
-      acc[vehicle.modelId] = (acc[vehicle.modelId] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+  const buildableStats = useMemo(() => {
+    const calculateBuildableCount = (parts: { itemStdCode: string; quantity: number }[]) => {
+      if (parts.length === 0) return 0;
+      const possibleCounts = parts.map((part) => {
+        const inventoryItem = getItemByStdCode(part.itemStdCode);
+        const availableQuantity = inventoryItem ? inventoryItem.quantity : 0;
+        if (part.quantity === 0) return Infinity;
+        return Math.floor(availableQuantity / part.quantity);
+      });
+      return Math.min(...possibleCounts);
+    };
 
-    return vehicleModels.map((model) => {
-      let buildableCount: number;
-      if (model.parts.length === 0) {
-        buildableCount = Infinity; // Can't build if no parts are defined, but can't divide by zero
-      } else {
-        const possibleCounts = model.parts.map((part) => {
-          const inventoryItem = getItemByStdCode(part.itemStdCode);
-          const availableQuantity = inventoryItem ? inventoryItem.quantity : 0;
-          if (part.quantity === 0) return Infinity; // Avoid division by zero
-          return Math.floor(availableQuantity / part.quantity);
-        });
-        buildableCount = Math.min(...possibleCounts);
-      }
+    const vehicleStats = vehicleModels.map((model) => ({
+      type: "Vehicle",
+      modelName: model.name,
+      buildableCount: calculateBuildableCount(model.parts),
+    }));
 
-      return {
-        modelId: model.id,
-        modelName: model.name,
-        buildableCount,
-        assembledCount: assembledCounts[model.id] || 0,
-      };
-    });
-  }, [vehicleModels, assembledVehicles, getItemByStdCode]);
+    const batteryStats = batteryModels.map((model) => ({
+      type: "Battery",
+      modelName: model.name,
+      buildableCount: calculateBuildableCount(model.parts),
+    }));
+
+    return [...vehicleStats, ...batteryStats].sort((a, b) => a.modelName.localeCompare(b.modelName));
+  }, [vehicleModels, batteryModels, getItemByStdCode]);
 
   return (
     <Card className="shadow-md h-full">
       <CardHeader>
-        <CardTitle>Vehicle Build Status</CardTitle>
+        <CardTitle>Production Capacity</CardTitle>
         <CardDescription>
-          Your current production capacity based on available inventory.
+          How many of each model you can build with current parts inventory.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {vehicleModels.length > 0 ? (
-          <ScrollArea className="h-[250px]">
-            <div className="space-y-4 pr-6">
-              {vehicleStats.map((stats) => (
-                <div key={stats.modelId} className="flex items-center justify-between">
-                  <p className="font-medium">{stats.modelName}</p>
-                  <div className="flex items-center gap-4">
-                     <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Assembled">
-                        <CheckCircle className="h-5 w-5 text-green-500" />
-                        <span className="font-bold text-foreground text-base">{stats.assembledCount}</span>
-                     </div>
-                     <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Buildable">
-                        <Wrench className="h-5 w-5 text-blue-500" />
-                        <span className="font-bold text-foreground text-base">{stats.buildableCount}</span>
-                     </div>
+        {buildableStats.length > 0 ? (
+          <ScrollArea className="h-[200px] pr-4">
+            <div className="space-y-4">
+              {buildableStats.map((stats, index) => (
+                <div key={index}>
+                  <div className="flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium">{stats.modelName}</p>
+                      <p className="text-xs text-muted-foreground">{stats.type}</p>
+                    </div>
+                    <div className="flex items-center gap-2" title="Buildable">
+                      <Wrench className="h-4 w-4 text-blue-500" />
+                      <span className="font-bold text-lg">{stats.buildableCount}</span>
+                    </div>
                   </div>
+                  {index < buildableStats.length -1 && <Separator className="mt-4" />}
                 </div>
               ))}
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center min-h-[250px]">
-            <Wrench className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              No vehicle models created yet.
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center min-h-[200px]">
+            <Wrench className="mx-auto h-10 w-10 text-muted-foreground" />
+            <p className="mt-4 text-sm font-medium">No Models Found</p>
+            <p className="text-xs text-muted-foreground">
+              Create a vehicle or battery model to see production capacity.
             </p>
           </div>
         )}
