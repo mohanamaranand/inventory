@@ -78,6 +78,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
   }
 
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
+  const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
@@ -95,12 +96,14 @@ export function DataTable<TData extends InventoryItem, TValue>({
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     state: {
       sorting,
       columnFilters,
+      globalFilter,
       columnVisibility,
       rowSelection,
     },
@@ -132,12 +135,10 @@ export function DataTable<TData extends InventoryItem, TValue>({
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center p-4 gap-4 flex-wrap">
         <Input
-          placeholder="Filter products..."
-          value={
-            (table.getColumn("productName")?.getFilterValue() as string) ?? ""
-          }
+          placeholder="Filter by name, code, invoice..."
+          value={globalFilter ?? ""}
           onChange={(event) =>
-            table.getColumn("productName")?.setFilterValue(event.target.value)
+            setGlobalFilter(event.target.value)
           }
           className="max-w-sm"
         />
