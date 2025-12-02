@@ -185,7 +185,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const existingItemWithNewStatus = inventory.find(
         item => item.itemStdCode === itemToSplit.itemStdCode && 
                 item.itemStatus === newStatus &&
-                item.productDetails === itemToSplit.productDetails
+                item.productDetails === itemToSplit.productDetails &&
+                item.salesInvoiceNumber === itemToSplit.salesInvoiceNumber
     );
 
     if (splitQuantity === itemToSplit.quantity) {
