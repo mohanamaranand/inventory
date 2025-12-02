@@ -1,6 +1,7 @@
 
 "use client"
 
+// Inspired by react-hot-toast library
 import * as React from "react"
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast"
 
@@ -158,6 +159,9 @@ export const reducer = (state: State, action: Action): State => {
 
     case "MARK_ALL_AS_READ": {
         const lastReadId = state.history.length > 0 ? state.history[0].id : null;
+        if(typeof window !== "undefined") {
+            window.localStorage.setItem("toast_last_read", lastReadId || '');
+        }
         return {
             ...state,
             lastReadId,
@@ -177,13 +181,8 @@ function dispatch(action: Action) {
     listener(memoryState)
   });
 
-  if (typeof window !== "undefined") {
-    if (action.type === 'ADD_TOAST' || action.type === 'SET_HISTORY') {
+  if (typeof window !== "undefined" && (action.type === 'ADD_TOAST' || action.type === 'SET_HISTORY')) {
       window.localStorage.setItem("toast_history", JSON.stringify(memoryState.history));
-    }
-    if (action.type === 'MARK_ALL_AS_READ' || action.type === 'SET_HISTORY') {
-      window.localStorage.setItem("toast_last_read", memoryState.lastReadId || '');
-    }
   }
 }
 
@@ -222,7 +221,7 @@ function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && memoryState.history.length === 0) {
       const historyStr = window.localStorage.getItem("toast_history");
       const lastReadId = window.localStorage.getItem("toast_last_read");
       const history = historyStr ? JSON.parse(historyStr) : [];
@@ -238,7 +237,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, [])
 
   return {
     ...state,
