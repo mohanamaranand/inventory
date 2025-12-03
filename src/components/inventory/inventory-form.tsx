@@ -57,7 +57,7 @@ const formSchema = z.object({
     required_error: "You need to select an item category.",
   }),
   productName: z.string().min(1, "Product name is required."),
-  productDetails: z.string(),
+  productDetails: z.string().optional(),
   quantity: z.coerce.number().int().min(0, "Quantity cannot be negative."),
   storageLocation: z.string().min(1, "Storage location is required."),
   unitPrice: z.coerce.number().min(0, "Unit price cannot be negative."),
@@ -75,7 +75,7 @@ type InventoryFormProps = {
 };
 
 export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: InventoryFormProps) {
-  const { addItem, updateItem, getItem, splitItem } = useInventory();
+  const { addItem, editAndMergeItem, getItem, splitItem } = useInventory();
   const { toast } = useToast();
   
   const editingItem = itemId ? getItem(itemId) : null;
@@ -106,6 +106,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
       form.reset({
         ...editingItem,
         date: editingItem.date,
+        productDetails: editingItem.productDetails || "",
         splitQuantity: 0,
       });
     } else {
@@ -132,6 +133,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         const submissionValues = {
             ...values,
             imageUrl: values.imageUrl || '',
+            productDetails: values.productDetails || '',
         };
 
         if (showSplit && submissionValues.splitQuantity && submissionValues.splitQuantity > 0) {
@@ -141,22 +143,20 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             }
             await splitItem(editingItem.id, submissionValues.itemStatus!, submissionValues.splitQuantity);
             toast({ title: "Item Split", description: `${submissionValues.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
-          } else if (editingItem && itemId) {
+        } else if (editingItem && itemId) {
             const { splitQuantity, ...updateData } = submissionValues;
-            await updateItem(itemId, {
-                ...updateData,
-                date: Timestamp.fromDate(submissionValues.date)
-            });
-            toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
-          } else {
+            const updatedItemData = { ...updateData, date: Timestamp.fromDate(submissionValues.date) };
+            await editAndMergeItem(itemId, updatedItemData);
+            toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated and combined with any matching items.` });
+        } else {
             const { splitQuantity, ...addData } = submissionValues;
             await addItem({
                 ...addData,
                 date: Timestamp.fromDate(submissionValues.date)
             });
             toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
-          }
-          onFormSubmit();
+        }
+        onFormSubmit();
     } catch (error) {
         console.error("Form submission error:", error);
         toast({
@@ -450,5 +450,3 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
-
-    
