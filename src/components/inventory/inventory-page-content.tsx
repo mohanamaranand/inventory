@@ -44,7 +44,7 @@ export function InventoryPageContent() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
@@ -52,8 +52,9 @@ export function InventoryPageContent() {
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-        const newItems: Omit<InventoryItem, 'id' | 'itemStatus' | 'date'>[] = [];
-        let updatedCount = 0;
+        const newItems: Omit<InventoryItem, 'id' | 'itemStatus'>[] = [];
+        const itemsToUpdate: {id: string, data: Partial<InventoryItem>}[] = [];
+
         let skippedCodeCount = 0;
         let skippedCategoryCount = 0;
 
@@ -74,7 +75,7 @@ export function InventoryPageContent() {
 
           const date = row['Date'] ? new Date(row['Date']) : new Date();
 
-          const itemData: Omit<InventoryItem, 'id' | 'itemStatus' | 'date'> = {
+          const itemData: Omit<InventoryItem, 'id' | 'itemStatus'> = {
             purchaseInvoiceNumber: String(
               row['Purchase Invoice Number'] || row['purchaseInvoiceNumber'] || ''
             ),
@@ -95,22 +96,28 @@ export function InventoryPageContent() {
 
           const existingItem = getItemByStdCode(itemData.itemStdCode);
           if (existingItem) {
-            updateItem(existingItem.id, itemData);
-            updatedCount++;
+             const { id, ...updateData} = itemData;
+             itemsToUpdate.push({ id: existingItem.id, data: updateData });
           } else {
             newItems.push(itemData);
           }
         });
 
         if (newItems.length > 0) {
-          addBatchItems(newItems);
+          await addBatchItems(newItems);
+        }
+
+        if (itemsToUpdate.length > 0) {
+            for (const item of itemsToUpdate) {
+                await updateItem(item.id, item.data);
+            }
         }
 
         const descriptions = [];
         if (newItems.length > 0)
           descriptions.push(`${newItems.length} new items added.`);
-        if (updatedCount > 0)
-          descriptions.push(`${updatedCount} existing items updated.`);
+        if (itemsToUpdate.length > 0)
+          descriptions.push(`${itemsToUpdate.length} existing items updated.`);
         if (skippedCodeCount > 0)
           descriptions.push(
             `${skippedCodeCount} rows skipped due to missing 'Item STD Code'.`
@@ -122,7 +129,7 @@ export function InventoryPageContent() {
 
         toast({
           title: 'Import Complete',
-          description: descriptions.join(' '),
+          description: descriptions.join(' ') || "No new data to import.",
         });
       } catch (error) {
         console.error('Error processing Excel file:', error);
@@ -130,7 +137,7 @@ export function InventoryPageContent() {
           variant: 'destructive',
           title: 'Import Failed',
           description:
-            "There was an error processing the Excel file. Please ensure it's a valid .xlsx file.",
+            "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
         });
       } finally {
         // Reset file input
