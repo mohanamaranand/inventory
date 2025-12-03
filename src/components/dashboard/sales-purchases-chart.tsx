@@ -19,7 +19,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { useInventory } from "@/context/inventory-context-firebase"
-import { SOLD_STATUSES, ITEM_STATUSES } from "@/lib/types"
+import { SOLD_STATUSES } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 
 const chartConfig = {
@@ -33,12 +33,15 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
+type ChartData = { month: string; sales: number; purchases: number }[];
+
 export function SalesPurchasesChart() {
   const { inventory } = useInventory()
+  const [chartData, setChartData] = React.useState<ChartData>([]);
 
-  const chartData = React.useMemo(() => {
+  React.useEffect(() => {
     const today = new Date();
-    const data: { month: string; sales: number; purchases: number }[] = [];
+    const data: ChartData = [];
 
     for (let i = 11; i >= 0; i--) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -47,22 +50,25 @@ export function SalesPurchasesChart() {
     }
 
     inventory.forEach(item => {
-      const itemDate = item.date.toDate();
-      const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
+        if (!item.date) return;
+        const itemDate = item.date.toDate();
+        const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
 
-      if (monthDiff >= 0 && monthDiff < 12) {
-        const monthIndex = 11 - monthDiff;
-        const value = item.quantity * item.unitPrice;
-        
-        if (SOLD_STATUSES.includes(item.itemStatus)) {
-          data[monthIndex].sales += value;
-        } else if (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') {
-            data[monthIndex].purchases += value;
+        if (monthDiff >= 0 && monthDiff < 12) {
+            const monthIndex = 11 - monthDiff;
+            if (data[monthIndex]) {
+                const value = item.quantity * item.unitPrice;
+                
+                if (SOLD_STATUSES.includes(item.itemStatus)) {
+                data[monthIndex].sales += value;
+                } else if (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') {
+                    data[monthIndex].purchases += value;
+                }
+            }
         }
-      }
     });
 
-    return data;
+    setChartData(data);
   }, [inventory]);
 
   return (

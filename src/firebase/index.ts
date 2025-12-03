@@ -24,3 +24,4 @@ function initializeFirebase() {
 export { initializeFirebase };
 export * from './provider';
 export * from './firestore/use-collection';
+export * from './client-provider';

@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import AppLayout from '@/components/layout/app-layout';
 import { InventoryProvider } from '@/context/inventory-context-firebase';
 import { Suspense } from 'react';
-import { FirebaseProvider } from '@/firebase/provider';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
   title: 'StockPilot',
@@ -28,11 +28,11 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <Suspense fallback={<div>Loading...</div>}>
-          <FirebaseProvider>
+          <FirebaseClientProvider>
             <InventoryProvider>
               <AppLayout>{children}</AppLayout>
             </InventoryProvider>
-          </FirebaseProvider>
+          </FirebaseClientProvider>
         </Suspense>
         <Toaster />
       </body>
