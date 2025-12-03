@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import AppLayout from '@/components/layout/app-layout';
 import { InventoryProvider } from '@/context/inventory-context';
+import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: 'StockPilot',
@@ -26,7 +27,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <InventoryProvider>
-          <AppLayout>{children}</AppLayout>
+          <Suspense fallback={<div>Loading...</div>}>
+            <AppLayout>{children}</AppLayout>
+          </Suspense>
         </InventoryProvider>
         <Toaster />
       </body>
