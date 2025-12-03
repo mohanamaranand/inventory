@@ -27,7 +27,7 @@ export function ProductionSummary() {
 
   const productionStats = useMemo(() => {
     const calculateBuildableCount = (parts: { itemStdCode: string; quantity: number }[]) => {
-      if (parts.length === 0) return 0;
+      if (!parts || parts.length === 0) return 0;
       const possibleCounts = parts.map((part) => {
         const inventoryItem = getItemByStdCode(part.itemStdCode);
         const availableQuantity = inventoryItem ? inventoryItem.quantity : 0;
