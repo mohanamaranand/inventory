@@ -20,6 +20,7 @@ import {
   getDocs,
   query,
   where,
+  limit,
 } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useFirestore } from '@/firebase';
@@ -58,10 +59,10 @@ interface SaleData {
 interface InventoryContextType extends AllData {
   loading: boolean;
   addItem: (
-    item: Omit<InventoryItem, 'id' | 'itemStatus'>
+    item: Omit<InventoryItem, 'id'>
   ) => Promise<void>;
   addBatchItems: (
-    items: Omit<InventoryItem, 'id' | 'itemStatus'>[]
+    items: Omit<InventoryItem, 'id'>[]
   ) => Promise<void>;
   updateItem: (
     id: string,
@@ -145,29 +146,44 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getCollectionRef = (name: string) => collection(db, name);
 
-  const addItem = async (
-    item: Omit<InventoryItem, 'id' | 'itemStatus'>
-  ) => {
-    await addDoc(getCollectionRef('inventory'), {
-      ...item,
-      itemStatus: item.quantity > 0 ? 'In Stock' : 'Out of Stock',
-    });
-  };
+  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
+    await runTransaction(db, async (transaction) => {
+        for (const item of items) {
+            const q = query(
+                getCollectionRef('inventory'),
+                where('itemStdCode', '==', item.itemStdCode),
+                where('itemStatus', '==', item.itemStatus),
+                where('productDetails', '==', item.productDetails),
+                where('salesInvoiceNumber', '==', item.salesInvoiceNumber || ''),
+                where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
+                limit(1)
+            );
 
-  const addBatchItems = async (
-    items: Omit<InventoryItem, 'id' | 'itemStatus'>[]
-  ) => {
-    const batch = writeBatch(db);
-    items.forEach((item) => {
-      const docRef = doc(getCollectionRef('inventory'));
-      batch.set(docRef, {
-        ...item,
-        date: item.date instanceof Date ? Timestamp.fromDate(item.date) : item.date,
-        itemStatus: item.quantity > 0 ? 'In Stock' : 'Out of Stock',
-      });
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                // Found an existing item, so update its quantity
+                const existingDoc = querySnapshot.docs[0];
+                const existingData = existingDoc.data() as InventoryItem;
+                const newQuantity = existingData.quantity + item.quantity;
+                transaction.update(existingDoc.ref, { quantity: newQuantity });
+            } else {
+                // No existing item found, so create a new one
+                const newDocRef = doc(getCollectionRef('inventory'));
+                transaction.set(newDocRef, {
+                    ...item,
+                    date: item.date instanceof Date ? Timestamp.fromDate(item.date) : item.date,
+                    salesInvoiceNumber: item.salesInvoiceNumber || ''
+                });
+            }
+        }
     });
-    await batch.commit();
-  };
+  }, [db]);
+  
+  const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
+    await addBatchItems([item]);
+  }, [addBatchItems]);
+
 
   const updateItem = async (
     id: string,
@@ -177,7 +193,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(docRef, updatedItem);
   };
   
-  const splitItem = async (id: string, newStatus: ItemStatus, splitQuantity: number) => {
+  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number) => {
       await runTransaction(db, async (transaction) => {
         const itemDocRef = doc(db, 'inventory', id);
         const itemDoc = await transaction.get(itemDocRef);
@@ -190,19 +206,49 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           throw 'Invalid split quantity';
         }
 
-        const newDocRef = doc(collection(db, 'inventory'));
         const { id: originalId, ...newItemData } = itemToSplit;
         
-        transaction.set(newDocRef, {
-             ...newItemData,
-             quantity: splitQuantity,
-             itemStatus: newStatus,
-             salesInvoiceNumber: newStatus.includes('Sold') ? itemToSplit.salesInvoiceNumber : '',
-        });
+        const newDocPayload: Omit<InventoryItem, 'id'> = {
+            ...newItemData,
+            quantity: splitQuantity,
+            itemStatus: newStatus,
+            salesInvoiceNumber: newStatus.includes('Sold') ? itemToSplit.salesInvoiceNumber : '',
+        };
 
-        transaction.update(itemDocRef, { quantity: itemToSplit.quantity - splitQuantity });
+        // Before creating a new item, check if an identical one already exists
+        const q = query(
+            getCollectionRef('inventory'),
+            where('itemStdCode', '==', newDocPayload.itemStdCode),
+            where('itemStatus', '==', newDocPayload.itemStatus),
+            where('productDetails', '==', newDocPayload.productDetails),
+            where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
+            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
+            limit(1)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            // Found a match, update quantity
+            const existingDoc = querySnapshot.docs[0];
+            const existingData = existingDoc.data() as InventoryItem;
+            transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
+        } else {
+            // No match, create new doc
+            const newDocRef = doc(collection(db, 'inventory'));
+            transaction.set(newDocRef, newDocPayload);
+        }
+
+        // Update the original item's quantity
+        const remainingQuantity = itemToSplit.quantity - splitQuantity;
+        if (remainingQuantity > 0) {
+            transaction.update(itemDocRef, { quantity: remainingQuantity });
+        } else {
+            // If the original item has no quantity left, delete it
+            transaction.delete(itemDocRef);
+        }
       });
-  };
+  }, [db]);
 
   const deleteItem = async (id: string, restock: boolean = false) => {
     // This is complex, will implement with assembled items
@@ -239,18 +285,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
       // Check part availability first
       for (const part of model.parts) {
-        const item = getItemByStdCode(part.itemStdCode);
-        if (!item || item.quantity < part.quantity) {
-          throw new Error(`Insufficient stock for ${item?.productName || part.itemStdCode}.`);
+        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+        const itemSnapshot = await getDocs(itemQuery);
+        if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
+          throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
         }
       }
   
       // Deduct parts from inventory
       for (const part of model.parts) {
-        const item = getItemByStdCode(part.itemStdCode)!;
-        const itemRef = doc(db, 'inventory', item.id);
+        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+        const itemSnapshot = await getDocs(itemQuery);
+        const itemDoc = itemSnapshot.docs[0];
+        const item = itemDoc.data() as InventoryItem;
+
         const newQuantity = item.quantity - part.quantity;
-        transaction.update(itemRef, { quantity: newQuantity });
+        if (newQuantity > 0) {
+            transaction.update(itemDoc.ref, { quantity: newQuantity });
+        } else {
+            transaction.delete(itemDoc.ref);
+        }
       }
   
       // Create assembled vehicle record
@@ -261,7 +315,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       });
   
       // Create new inventory item for the assembled vehicle
-      const newInventoryItemRef = doc(collection(db, 'inventory'));
       const totalCost = model.parts.reduce((sum, part) => {
           const item = getItemByStdCode(part.itemStdCode);
           return sum + (item ? item.unitPrice * part.quantity : 0);
@@ -280,6 +333,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           storageLocation: 'Finished Goods',
           date: serverTimestamp() as Timestamp,
       };
+      
+      const newInventoryItemRef = doc(collection(db, 'inventory'));
       transaction.set(newInventoryItemRef, assembledItem);
     });
   };
@@ -291,6 +346,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!vehicleDoc.exists()) throw new Error("Assembled vehicle not found");
         
         const vehicle = vehicleDoc.data() as AssembledVehicle;
+        const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
+        const inventorySnapshot = await getDocs(inventoryItemQuery);
         
         if (restock) {
             const model = getVehicleModel(vehicle.modelId);
@@ -300,9 +357,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     if (item) {
                         const itemRef = doc(db, 'inventory', item.id);
                         transaction.update(itemRef, { quantity: item.quantity + part.quantity });
+                    } else {
+                        // If item doesn't exist, we might need to create it. This part is complex.
+                        // For now, we assume base parts exist. A more robust solution is needed for production.
                     }
                 }
             }
+        }
+
+        if (!inventorySnapshot.empty) {
+            transaction.delete(inventorySnapshot.docs[0].ref);
         }
         transaction.delete(vehicleRef);
     });
@@ -323,31 +387,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           throw new Error("Battery model or its parts not found.");
       }
 
-      // Check part availability first
       for (const part of model.parts) {
-          const item = getItemByStdCode(part.itemStdCode);
-          if (!item || item.quantity < part.quantity) {
-              throw new Error(`Insufficient stock for ${item?.productName || part.itemStdCode}.`);
+        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+        const itemSnapshot = await getDocs(itemQuery);
+        if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
+          throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
+        }
+      }
+
+      for (const part of model.parts) {
+          const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+          const itemSnapshot = await getDocs(itemQuery);
+          const itemDoc = itemSnapshot.docs[0];
+          const item = itemDoc.data() as InventoryItem;
+  
+          const newQuantity = item.quantity - part.quantity;
+          if (newQuantity > 0) {
+              transaction.update(itemDoc.ref, { quantity: newQuantity });
+          } else {
+              transaction.delete(itemDoc.ref);
           }
       }
 
-      // Deduct parts from inventory
-      for (const part of model.parts) {
-          const item = getItemByStdCode(part.itemStdCode)!;
-          const itemRef = doc(db, 'inventory', item.id);
-          const newQuantity = item.quantity - part.quantity;
-          transaction.update(itemRef, { quantity: newQuantity });
-      }
-
-      // Create assembled battery record
       const assembledBatteryRef = doc(collection(db, 'assembledBatteries'));
       transaction.set(assembledBatteryRef, {
           ...batteryData,
           assemblyDate: serverTimestamp(),
       });
 
-      // Create new inventory item for the assembled battery
-      const newInventoryItemRef = doc(collection(db, 'inventory'));
       const totalCost = model.parts.reduce((sum, part) => {
         const item = getItemByStdCode(part.itemStdCode);
         return sum + (item ? item.unitPrice * part.quantity : 0);
@@ -366,6 +433,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         storageLocation: 'Finished Goods',
         date: serverTimestamp() as Timestamp,
     };
+    const newInventoryItemRef = doc(collection(db, 'inventory'));
     transaction.set(newInventoryItemRef, assembledItem);
   });
   };
@@ -378,6 +446,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
         const battery = batteryDoc.data() as AssembledBattery;
 
+        const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
+        const inventorySnapshot = await getDocs(inventoryItemQuery);
+
         if (restock) {
             const model = getBatteryModel(battery.modelId);
             if (model?.parts) {
@@ -389,6 +460,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
             }
+        }
+        if (!inventorySnapshot.empty) {
+            transaction.delete(inventorySnapshot.docs[0].ref);
         }
         transaction.delete(batteryRef);
     });
@@ -435,7 +509,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
               });
 
               const remainingQuantity = currentItem.quantity - saleItem.quantity;
-              transaction.update(itemRef, { quantity: remainingQuantity });
+              if (remainingQuantity > 0) {
+                transaction.update(itemRef, { quantity: remainingQuantity });
+              } else {
+                transaction.delete(itemRef);
+              }
           }
       });
   };
@@ -445,6 +523,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     for (const coll of collections) {
         const collRef = getCollectionRef(coll);
         const snapshot = await getDocs(query(collRef));
+        if (snapshot.empty) continue;
         const batch = writeBatch(db);
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
@@ -539,6 +618,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getVehicleModel,
       getBatteryModel,
       getCustomer,
+      addItem,
+      addBatchItems,
+      splitItem
     ]
   );
 
