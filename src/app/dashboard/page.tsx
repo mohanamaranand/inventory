@@ -2,12 +2,11 @@
 import { Header } from "@/components/layout/header";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { SalesPurchasesChart } from "@/components/dashboard/sales-purchases-chart";
-import { BuildableVehicles } from "@/components/dashboard/buildable-vehicles";
+import { ProductionSummary } from "@/components/dashboard/production-summary";
 import { StatusWidget } from "@/components/dashboard/status-widget";
 import { CategoryWidget } from "@/components/dashboard/category-widget";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AssembledSummary } from "@/components/dashboard/assembled-summary";
 
 function DashboardPageContent() {
     return (
@@ -18,13 +17,10 @@ function DashboardPageContent() {
                 <div className="grid gap-8 lg:grid-cols-3">
                     <div className="lg:col-span-2 space-y-8">
                         <SalesPurchasesChart />
-                        <div className="grid gap-8 md:grid-cols-2">
-                            <BuildableVehicles />
-                            <StatusWidget />
-                        </div>
+                        <ProductionSummary />
                     </div>
-                    <div className="space-y-8">
-                        <AssembledSummary />
+                    <div className="grid gap-8 lg:col-start-3 lg:row-start-2">
+                        <StatusWidget />
                         <CategoryWidget />
                     </div>
                 </div>
@@ -55,10 +51,7 @@ function DashboardLoadingSkeleton() {
              <div className="grid gap-8 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-8">
                     <Skeleton className="h-80" />
-                     <div className="grid gap-8 md:grid-cols-2">
-                        <Skeleton className="h-64" />
-                        <Skeleton className="h-64" />
-                    </div>
+                    <Skeleton className="h-64" />
                 </div>
                 <div className="space-y-8">
                     <Skeleton className="h-40" />
