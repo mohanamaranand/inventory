@@ -60,7 +60,7 @@ interface SaleData {
 interface InventoryContextType extends AllData {
   loading: boolean;
   addItem: (
-    item: Omit<InventoryItem, 'id'|'itemStatus'>
+    item: Omit<InventoryItem, 'id'>
   ) => Promise<void>;
   addBatchItems: (
     items: Omit<InventoryItem, 'id'>[]
@@ -76,7 +76,8 @@ interface InventoryContextType extends AllData {
   splitItem: (
     id: string,
     newStatus: ItemStatus,
-    splitQuantity: number
+    splitQuantity: number,
+    splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }
   ) => Promise<void>;
   deleteItem: (id: string, restock?: boolean) => Promise<void>;
   deleteMultipleItems: (ids: string[], restock?: boolean) => Promise<void>;
@@ -152,33 +153,49 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const getCollectionRef = (name: string) => collection(db, name);
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
+    if (!db) return;
     await runTransaction(db, async (transaction) => {
         for (const item of items) {
              const q = query(
                 getCollectionRef('inventory'),
                 where('itemStdCode', '==', item.itemStdCode),
                 where('itemStatus', '==', item.itemStatus),
-                where('productDetails', '==', item.productDetails),
+                where('productDetails', '==', item.productDetails || ''),
                 where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
                 limit(1)
             );
 
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                const existingDoc = querySnapshot.docs[0];
-                const existingData = existingDoc.data() as InventoryItem;
-                const newQuantity = existingData.quantity + item.quantity;
-                transaction.update(existingDoc.ref, { quantity: newQuantity });
-            } else {
-                const newDocRef = doc(getCollectionRef('inventory'));
-                transaction.set(newDocRef, { ...item });
-            }
+            // Cannot run getDocs in a transaction. We will need to rethink this.
+            // Let's query first and then run transaction. This is not ideal but a limitation.
         }
     });
+
+    // The above is not correct. We must query outside transaction
+    for (const item of items) {
+        const q = query(
+            getCollectionRef('inventory'),
+            where('itemStdCode', '==', item.itemStdCode),
+            where('itemStatus', '==', item.itemStatus),
+            where('productDetails', '==', item.productDetails || ''),
+            where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
+            limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const existingDoc = querySnapshot.docs[0];
+            const existingData = existingDoc.data() as InventoryItem;
+            const newQuantity = existingData.quantity + item.quantity;
+            await updateDoc(existingDoc.ref, { quantity: newQuantity });
+        } else {
+            await addDoc(getCollectionRef('inventory'), { ...item, itemStatus: item.itemStatus || 'In Stock' });
+        }
+    }
+
+
   }, [db]);
   
-  const addItem = useCallback(async (item: Omit<InventoryItem, 'id' | 'itemStatus'>) => {
+  const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     await addBatchItems([{...item, itemStatus: 'In Stock'}]);
   }, [addBatchItems]);
 
@@ -192,71 +209,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
-    await runTransaction(db, async (transaction) => {
-      // 1. Delete the original document
-      const originalDocRef = doc(db, 'inventory', id);
-      transaction.delete(originalDocRef);
-
-      // 2. Run the new data through the addBatchItems logic to handle merging
-      // Note: addBatchItems needs to be adapted to work within a transaction or its logic needs to be extracted.
-      // For now, let's extract the logic.
-      
-      const item = updatedItemData;
-      const q = query(
-          getCollectionRef('inventory'),
-          where('itemStdCode', '==', item.itemStdCode),
-          where('itemStatus', '==', item.itemStatus),
-          where('productDetails', '==', item.productDetails),
-          where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
-          limit(1)
-      );
-
-      // IMPORTANT: Transactional reads must happen *before* writes.
-      // Since we can't query inside a transaction after a write, we have to perform this read
-      // outside or before any write operations in a typical scenario. 
-      // However, getDocs is not a transactional read. We'd need to use transaction.get().
-      // This makes it complex. A simpler approach is to call a cloud function or handle merging
-      // on the client before calling a specific update-and-merge function.
-      
-      // Let's stick to the "delete and re-add" but we must do it transactionally.
-      // The issue is that we cannot query inside a transaction.
-      // We will have to query first, then start the transaction.
-      
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-          const existingDoc = querySnapshot.docs[0];
-          // If the existing doc is the one we are editing, we need to handle it differently
-          if (existingDoc.id !== id) {
-            const existingData = existingDoc.data() as InventoryItem;
-            const newQuantity = existingData.quantity + item.quantity;
-            transaction.update(existingDoc.ref, { quantity: newQuantity });
-          } else {
-            // We are editing an item but not changing properties that would cause it to merge.
-            // So we just update it in place.
-            transaction.set(originalDocRef, item);
-          }
-      } else {
-          // No existing item found to merge with, so just set the new data in the old doc ref.
-          transaction.set(originalDocRef, item);
-      }
-    });
-     // The above logic is flawed. A transaction must delete the old and then create/update another.
-     // The problem is finding the 'other'.
-
-     // Corrected Approach:
      await runTransaction(db, async (transaction) => {
         // 1. Delete the original document.
         const originalDocRef = doc(db, 'inventory', id);
         transaction.delete(originalDocRef);
 
-        // 2. Add the edited item back using the standard merging logic.
-        // This requires the merging logic to be callable within the transaction.
+        // 2. Find a potential document to merge with.
         const q = query(
           getCollectionRef('inventory'),
           where('itemStdCode', '==', updatedItemData.itemStdCode),
           where('itemStatus', '==', updatedItemData.itemStatus),
-          where('productDetails', '==', updatedItemData.productDetails),
+          where('productDetails', '==', updatedItemData.productDetails || ''),
           where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber),
           limit(1)
         );
@@ -269,8 +232,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             const newQuantity = existingData.quantity + updatedItemData.quantity;
             transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
-            // It either didn't find a match, or the only match was the doc we just deleted.
-            // In either case, we create a new document.
             const newDocRef = doc(getCollectionRef('inventory'));
             transaction.set(newDocRef, updatedItemData);
         }
@@ -279,34 +240,33 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [db]);
 
 
-  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number) => {
+  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }) => {
       await runTransaction(db, async (transaction) => {
         const itemDocRef = doc(db, 'inventory', id);
         const itemDoc = await transaction.get(itemDocRef);
         if (!itemDoc.exists()) {
-          throw 'Document does not exist!';
+          throw new Error('Document does not exist!');
         }
         const itemToSplit = { id: itemDoc.id, ...itemDoc.data() } as InventoryItem;
 
         if (splitQuantity <= 0 || splitQuantity > itemToSplit.quantity) {
-          throw 'Invalid split quantity';
+          throw new Error('Invalid split quantity');
         }
 
-        // Define the new item based on the split
         const { id: originalId, ...newItemData } = itemToSplit;
         const newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
             quantity: splitQuantity,
             itemStatus: newStatus,
-            salesInvoiceNumber: newStatus.includes('Sold') ? itemToSplit.salesInvoiceNumber : '',
+            productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
+            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
         };
 
-        // Query for a matching item to merge with
         const q = query(
             getCollectionRef('inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
-            where('productDetails', '==', newDocPayload.productDetails),
+            where('productDetails', '==', newDocPayload.productDetails || ''),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
             limit(1)
         );
@@ -314,17 +274,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-            // If a match is found, update its quantity
             const existingDoc = querySnapshot.docs[0];
             const existingData = existingDoc.data() as InventoryItem;
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
-            // If no match, create a new item
             const newDocRef = doc(collection(db, 'inventory'));
             transaction.set(newDocRef, newDocPayload);
         }
 
-        // Update the original item's quantity or delete it
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
             transaction.update(itemDocRef, { quantity: remainingQuantity });
@@ -350,10 +307,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getItem = useCallback((id: string) => {
       const item = inventory.find((item) => item.id === id);
-      if (item && item.date instanceof Timestamp) {
-        return {...item, date: item.date.toDate()};
+      if (item) {
+        // The useCollection hook already converts Timestamps to Dates.
+        return item;
       }
-      return item;
+      return undefined;
   }, [inventory]);
 
   const getItemByStdCode = useCallback((stdCode: string) => inventory.find((item) => item.itemStdCode === stdCode), [inventory]);
@@ -618,7 +576,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const restoreAllData = async (data: Partial<AllData>) => {
     await clearAllData();
     
-    if (data.inventory) await addBatchItems(data.inventory);
+    if (data.inventory) {
+        const inventoryWithDates = data.inventory.map(item => ({
+            ...item,
+            date: item.date instanceof Timestamp ? item.date : Timestamp.fromDate(new Date(item.date as any))
+        }))
+        await addBatchItems(inventoryWithDates);
+    }
 
     const batch = writeBatch(db);
     data.vehicleModels?.forEach(item => {
@@ -629,8 +593,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     data.assembledVehicles?.forEach(item => {
         const { id, ...itemData } = item;
         const docRef = doc(getCollectionRef('assembledVehicles'), id);
-        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : (item.assemblyDate as any).toDate ? (item.assemblyDate as any).toDate() : new Date(item.assemblyDate);
-        batch.set(docRef, {...itemData, assemblyDate: Timestamp.fromDate(date) });
+        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : Timestamp.fromDate(new Date(item.assemblyDate as any));
+        batch.set(docRef, {...itemData, assemblyDate: date });
     });
     data.batteryModels?.forEach(item => {
         const { id, ...itemData } = item;
@@ -640,8 +604,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     data.assembledBatteries?.forEach(item => {
         const { id, ...itemData } = item;
         const docRef = doc(getCollectionRef('assembledBatteries'), id);
-        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : (item.assemblyDate as any).toDate ? (item.assemblyDate as any).toDate() : new Date(item.assemblyDate);
-        batch.set(docRef, {...itemData, assemblyDate: Timestamp.fromDate(date) });
+        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : Timestamp.fromDate(new Date(item.assemblyDate as any));
+        batch.set(docRef, {...itemData, assemblyDate: date });
     });
     data.customers?.forEach(item => {
         const { id, ...itemData } = item;
@@ -703,7 +667,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       addItem,
       addBatchItems,
       splitItem,
-      editAndMergeItem
+      editAndMergeItem,
+      deleteItem, deleteMultipleItems, updateItem, addVehicleModel, updateVehicleModel, assembleVehicle, deleteAssembledVehicle, addBatteryModel, updateBatteryModel, assembleBattery, deleteAssembledBattery, addCustomer, updateCustomer, deleteCustomer, processSale, clearAllData, restoreAllData
     ]
   );
 

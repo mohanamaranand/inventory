@@ -107,6 +107,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         ...editingItem,
         date: editingItem.date,
         productDetails: editingItem.productDetails || "",
+        salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         splitQuantity: 0,
       });
     } else {
@@ -134,6 +135,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             ...values,
             imageUrl: values.imageUrl || '',
             productDetails: values.productDetails || '',
+            salesInvoiceNumber: values.salesInvoiceNumber || ''
         };
 
         if (showSplit && submissionValues.splitQuantity && submissionValues.splitQuantity > 0) {
@@ -141,7 +143,15 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
               form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
               return;
             }
-            await splitItem(editingItem.id, submissionValues.itemStatus!, submissionValues.splitQuantity);
+            await splitItem(
+                editingItem.id,
+                submissionValues.itemStatus!,
+                submissionValues.splitQuantity,
+                {
+                    productDetails: submissionValues.productDetails,
+                    salesInvoiceNumber: submissionValues.salesInvoiceNumber
+                }
+            );
             toast({ title: "Item Split", description: `${submissionValues.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
             const { splitQuantity, ...updateData } = submissionValues;
@@ -404,7 +414,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                           <AlertTriangle className="h-4 w-4" />
                           <AlertTitle>Splitting Item</AlertTitle>
                           <AlertDescription>
-                            You have changed the status. Enter a quantity below to split that amount into a new inventory item with the new status. The original item's quantity will be reduced.
+                            You have changed the status. Enter a quantity below to split that amount into a new inventory item with the new status. The original item's quantity will be reduced. You can also edit details like 'Product Details' or 'Sales Invoice No.' for the new split item.
                           </AlertDescription>
                         </Alert>
                         <FormField
