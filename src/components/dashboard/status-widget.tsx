@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useMemo } from "react";
 import {
   Card,

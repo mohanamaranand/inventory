@@ -23,7 +23,7 @@ import {
   SheetFooter,
   SheetClose,
 } from "@/components/ui/sheet";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useMemo } from "react";
 import { PlusCircle, Trash2 } from "lucide-react";

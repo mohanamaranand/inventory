@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Represents a single item in the inventory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "purchaseInvoiceNumber": { "type": "string" },
+        "vendorName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "itemStdCode": { "type": "string" },
+        "itemCategory": { "type": "string" },
+        "productName": { "type": "string" },
+        "productDetails": { "type": "string" },
+        "quantity": { "type": "number" },
+        "storageLocation": { "type": "string" },
+        "unitPrice": { "type": "number" },
+        "itemStatus": { "type": "string" },
+        "salesInvoiceNumber": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "salesData": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": { "type": "string" },
+              "quantitySold": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["id", "productName", "quantity", "unitPrice", "itemStdCode"]
+    },
+    "VehicleModel": {
+      "title": "Vehicle Model",
+      "description": "Defines a template for assembling a vehicle, including required parts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "itemStdCode": { "type": "string" },
+              "quantity": { "type": "number" }
+            }
+          }
+        }
+      },
+       "required": ["id", "name", "parts"]
+    },
+    "AssembledVehicle": {
+        "title": "Assembled Vehicle",
+        "description": "Represents a vehicle that has been assembled.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "modelId": { "type": "string" },
+            "chassisNumber": { "type": "string" },
+            "motorNumber": { "type": "string" },
+            "assemblyDate": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "modelId", "chassisNumber", "motorNumber", "assemblyDate"]
+    },
+     "BatteryModel": {
+      "title": "Battery Model",
+      "description": "Defines a template for assembling a battery, including required parts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "itemStdCode": { "type": "string" },
+              "quantity": { "type": "number" }
+            }
+          }
+        }
+      },
+       "required": ["id", "name", "parts"]
+    },
+    "AssembledBattery": {
+        "title": "Assembled Battery",
+        "description": "Represents a battery that has been assembled.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "modelId": { "type": "string" },
+            "serialNumber": { "type": "string" },
+            "assemblyDate": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "modelId", "serialNumber", "assemblyDate"]
+    },
+    "Customer": {
+        "title": "Customer",
+        "description": "Represents a customer or dealer.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "contactPerson": { "type": "string" },
+            "phone": { "type": "string" },
+            "email": { "type": "string", "format": "email" },
+            "address": { "type": "string" }
+        },
+        "required": ["id", "name", "contactPerson", "phone", "email", "address"]
+    }
+  },
+  "auth": {
+    "providers": ["anonymous"]
+  },
+  "firestore": {
+    "/inventory/{inventoryId}": {
+      "schema": { "$ref": "#/entities/InventoryItem" },
+      "description": "Collection of all inventory items."
+    },
+    "/vehicleModels/{modelId}": {
+        "schema": { "$ref": "#/entities/VehicleModel" },
+        "description": "Collection of all vehicle model definitions."
+    },
+    "/assembledVehicles/{vehicleId}": {
+        "schema": { "$ref": "#/entities/AssembledVehicle" },
+        "description": "Collection of all assembled vehicles."
+    },
+     "/batteryModels/{modelId}": {
+        "schema": { "$ref": "#/entities/BatteryModel" },
+        "description": "Collection of all battery model definitions."
+    },
+    "/assembledBatteries/{batteryId}": {
+        "schema": { "$ref": "#/entities/AssembledBattery" },
+        "description": "Collection of all assembled batteries."
+    },
+    "/customers/{customerId}": {
+        "schema": { "$ref": "#/entities/Customer" },
+        "description": "Collection of all customers."
+    }
+  }
+}

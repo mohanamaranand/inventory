@@ -29,7 +29,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Wrench, CheckCircle, AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
@@ -91,7 +91,7 @@ export function AssembleVehicle() {
     }
 
     try {
-      assembleVehicle({ ...values, assemblyDate: new Date() });
+      assembleVehicle({ ...values });
       toast({
         title: "Vehicle Assembled!",
         description: `A new ${selectedModel?.name} has been built. Inventory updated.`,

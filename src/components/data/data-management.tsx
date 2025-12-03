@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState } from "react";
 import * as XLSX from "xlsx";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,7 +26,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Upload, Trash2, AlertTriangle } from "lucide-react";
-import type { AssembledBattery, AssembledVehicle, BatteryModel, InventoryItem, VehicleModel } from "@/lib/types";
+import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel } from "@/lib/types";
+import { Timestamp } from "firebase/firestore";
 
 export function DataManagement() {
   const {
@@ -34,6 +36,7 @@ export function DataManagement() {
     assembledVehicles,
     batteryModels,
     assembledBatteries,
+    customers,
     clearAllData,
     restoreAllData,
   } = useInventory();
@@ -43,20 +46,28 @@ export function DataManagement() {
 
 
   const handleDownload = () => {
+    const toDateString = (date: any) => {
+        if (!date) return '';
+        if (date instanceof Timestamp) return date.toDate().toISOString().split('T')[0];
+        if (date instanceof Date) return date.toISOString().split('T')[0];
+        return String(date);
+    }
+    
     const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
         ...item,
-        date: item.date instanceof Date ? item.date.toISOString().split('T')[0] : item.date, // Format date for Excel
+        date: toDateString(item.date),
     })));
-    const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels);
+    const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels.map(vm => ({ ...vm, parts: JSON.stringify(vm.parts) })));
     const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({
         ...v,
-        assemblyDate: v.assemblyDate instanceof Date ? v.assemblyDate.toISOString().split('T')[0] : v.assemblyDate,
+        assemblyDate: toDateString(v.assemblyDate),
     })));
-    const batteryModelsSheet = XLSX.utils.json_to_sheet(batteryModels);
+    const batteryModelsSheet = XLSX.utils.json_to_sheet(batteryModels.map(bm => ({...bm, parts: JSON.stringify(bm.parts) })));
     const assembledBatteriesSheet = XLSX.utils.json_to_sheet(assembledBatteries.map(b => ({
         ...b,
-        assemblyDate: b.assemblyDate instanceof Date ? b.assemblyDate.toISOString().split('T')[0] : b.assemblyDate,
+        assemblyDate: toDateString(b.assemblyDate),
     })));
+    const customersSheet = XLSX.utils.json_to_sheet(customers);
 
 
     const workbook = XLSX.utils.book_new();
@@ -65,6 +76,8 @@ export function DataManagement() {
     XLSX.utils.book_append_sheet(workbook, assembledVehiclesSheet, "Assembled Vehicles");
     XLSX.utils.book_append_sheet(workbook, batteryModelsSheet, "Battery Models");
     XLSX.utils.book_append_sheet(workbook, assembledBatteriesSheet, "Assembled Batteries");
+    XLSX.utils.book_append_sheet(workbook, customersSheet, "Customers");
+
 
     const today = new Date().toISOString().split("T")[0];
     XLSX.writeFile(workbook, `stockpilot_backup_${today}.xlsx`);
@@ -97,24 +110,22 @@ export function DataManagement() {
         const assembledVehiclesSheet = workbook.Sheets["Assembled Vehicles"];
         const batteryModelsSheet = workbook.Sheets["Battery Models"];
         const assembledBatteriesSheet = workbook.Sheets["Assembled Batteries"];
+        const customersSheet = workbook.Sheets["Customers"];
 
-        if (!inventorySheet || !vehicleModelsSheet || !assembledVehiclesSheet) {
-          throw new Error("Invalid backup file. One or more required vehicle sheets are missing.");
-        }
-
-        const restoredInventory: InventoryItem[] = XLSX.utils.sheet_to_json(inventorySheet);
-        const restoredVehicleModels: VehicleModel[] = XLSX.utils.sheet_to_json(vehicleModelsSheet);
-        const restoredAssembledVehicles: AssembledVehicle[] = XLSX.utils.sheet_to_json(assembledVehiclesSheet);
-        
+        const restoredInventory: InventoryItem[] = inventorySheet ? XLSX.utils.sheet_to_json(inventorySheet) : [];
+        const restoredVehicleModels: VehicleModel[] = vehicleModelsSheet ? XLSX.utils.sheet_to_json(vehicleModelsSheet) : [];
+        const restoredAssembledVehicles: AssembledVehicle[] = assembledVehiclesSheet ? XLSX.utils.sheet_to_json(assembledVehiclesSheet) : [];
         const restoredBatteryModels: BatteryModel[] = batteryModelsSheet ? XLSX.utils.sheet_to_json(batteryModelsSheet) : [];
         const restoredAssembledBatteries: AssembledBattery[] = assembledBatteriesSheet ? XLSX.utils.sheet_to_json(assembledBatteriesSheet) : [];
+        const restoredCustomers: Customer[] = customersSheet ? XLSX.utils.sheet_to_json(customersSheet) : [];
 
         restoreAllData({
             inventory: restoredInventory,
-            vehicleModels: restoredVehicleModels,
+            vehicleModels: restoredVehicleModels.map(vm => ({ ...vm, parts: typeof vm.parts === 'string' ? JSON.parse(vm.parts) : vm.parts })),
             assembledVehicles: restoredAssembledVehicles,
-            batteryModels: restoredBatteryModels,
-            assembledBatteries: restoredAssembledBatteries
+            batteryModels: restoredBatteryModels.map(bm => ({ ...bm, parts: typeof bm.parts === 'string' ? JSON.parse(bm.parts) : bm.parts })),
+            assembledBatteries: restoredAssembledBatteries,
+            customers: restoredCustomers
         });
 
         toast({
@@ -127,7 +138,7 @@ export function DataManagement() {
         toast({
           variant: "destructive",
           title: "Restore Failed",
-          description: error.message || "There was an error processing the backup file.",
+          description: error.message || "There was an error processing the backup file. Ensure parts columns are valid JSON.",
         });
       } finally {
         setBackupFile(null);
@@ -198,8 +209,7 @@ export function DataManagement() {
                     <AlertDialogHeader>
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This will permanently delete all
-                        inventory, vehicle models, and assembled vehicles.
+                        This will permanently delete all data including inventory, models, and customers.
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

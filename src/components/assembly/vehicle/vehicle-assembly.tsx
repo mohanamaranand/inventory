@@ -8,7 +8,7 @@ import { PlusCircle, Upload } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateModelForm } from "@/components/assembly/create-model-form";
 import { AssembleVehicle } from "@/components/assembly/assemble-vehicle";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import {
   Card,
   CardContent,

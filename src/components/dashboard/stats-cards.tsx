@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Boxes, DollarSign, Users, ShoppingCart } from "lucide-react";
@@ -62,7 +62,7 @@ export function StatsCards() {
     },
     {
       title: "Total Customers",
-      value: stats.totalCustomers,
+      value: stats.totalCustomers.toLocaleString(),
       icon: Users,
       color: "text-purple-500",
     },

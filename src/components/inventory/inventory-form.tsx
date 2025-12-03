@@ -31,7 +31,7 @@ import {
   SheetFooter,
   SheetClose,
 } from "@/components/ui/sheet";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import {
   ITEM_CATEGORIES,
@@ -45,6 +45,7 @@ import { CalendarIcon, AlertTriangle } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { Timestamp } from "firebase/firestore";
 
 const formSchema = z.object({
   purchaseInvoiceNumber: z.string().min(1, "Purchase invoice number is required."),
@@ -103,6 +104,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
+        date: editingItem.date.toDate(),
         splitQuantity: 0,
       });
     } else {
@@ -124,22 +126,39 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     }
   }, [editingItem, form, open]);
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
-      if (!editingItem || values.splitQuantity > editingItem.quantity) {
-        form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
-        return;
-      }
-      splitItem(editingItem.id, values.itemStatus!, values.splitQuantity);
-      toast({ title: "Item Split", description: `${values.splitQuantity} units of "${values.productName}" moved to status "${values.itemStatus}".` });
-    } else if (editingItem && itemId) {
-      updateItem(itemId, values);
-      toast({ title: "Item Updated", description: `"${values.productName}" has been updated.` });
-    } else {
-      addItem(values);
-      toast({ title: "Item Added", description: `"${values.productName}" has been added to inventory.` });
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+        if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
+            if (!editingItem || values.splitQuantity > editingItem.quantity) {
+              form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
+              return;
+            }
+            await splitItem(editingItem.id, values.itemStatus!, values.splitQuantity);
+            toast({ title: "Item Split", description: `${values.splitQuantity} units of "${values.productName}" moved to status "${values.itemStatus}".` });
+          } else if (editingItem && itemId) {
+            const { splitQuantity, ...updateData } = values;
+            await updateItem(itemId, {
+                ...updateData,
+                date: Timestamp.fromDate(values.date)
+            });
+            toast({ title: "Item Updated", description: `"${values.productName}" has been updated.` });
+          } else {
+            const { splitQuantity, ...addData } = values;
+            await addItem({
+                ...addData,
+                date: Timestamp.fromDate(values.date)
+            });
+            toast({ title: "Item Added", description: `"${values.productName}" has been added to inventory.` });
+          }
+          onFormSubmit();
+    } catch (error) {
+        console.error("Form submission error:", error);
+        toast({
+            variant: "destructive",
+            title: "Operation Failed",
+            description: "An error occurred while saving the item."
+        })
     }
-    onFormSubmit();
   }
 
   return (

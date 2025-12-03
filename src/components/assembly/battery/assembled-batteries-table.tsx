@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import {
   Table,
   TableBody,
@@ -31,6 +31,7 @@ import {
     AlertDialogTrigger,
   } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast";
+import { Timestamp } from "firebase/firestore";
 
 export function AssembledBatteriesTable() {
   const { assembledBatteries, getBatteryModel, deleteAssembledBattery } = useInventory();
@@ -43,6 +44,12 @@ export function AssembledBatteriesTable() {
         title: "Battery Deleted",
         description: `The ${modelName} with serial ${serialNumber} has been deleted. ${restock ? 'Parts have been restocked.' : ''}`
     });
+  }
+
+   const formatDate = (date: any) => {
+    if (date instanceof Timestamp) return date.toDate().toLocaleDateString();
+    if (date instanceof Date) return date.toLocaleDateString();
+    return "N/A";
   }
 
   return (
@@ -75,7 +82,7 @@ export function AssembledBatteriesTable() {
                       <TableCell>{model?.name || "Unknown Model"}</TableCell>
                       <TableCell>{battery.serialNumber}</TableCell>
                       <TableCell>
-                        {battery.assemblyDate.toLocaleDateString()}
+                        {formatDate(battery.assemblyDate)}
                       </TableCell>
                       <TableCell className="text-right">
                         <AlertDialog>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useMemo } from "react";
 import {
   Card,
@@ -26,7 +26,7 @@ export function ProductionSummary() {
   } = useInventory();
 
   const productionStats = useMemo(() => {
-    const calculateBuildableCount = (parts: { itemStdCode: string; quantity: number }[]) => {
+    const calculateBuildableCount = (parts: { itemStdCode: string; quantity: number }[] | undefined) => {
       if (!parts || parts.length === 0) return 0;
       const possibleCounts = parts.map((part) => {
         const inventoryItem = getItemByStdCode(part.itemStdCode);

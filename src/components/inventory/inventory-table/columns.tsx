@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import type { InventoryItem, ItemStatus } from "@/lib/types";
 import { ITEM_STATUSES } from "@/lib/types";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -42,6 +42,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Timestamp } from "firebase/firestore";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
@@ -72,7 +73,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     header: "S.No",
     cell: ({ row }) => {
         const id = row.original.id;
-        return <span>{id.split('-').pop()}</span>;
+        return <span>{id.substring(0, 5)}...</span>;
     },
   },
   {

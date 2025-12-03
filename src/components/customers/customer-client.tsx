@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { CustomerForm } from "./customer-form";

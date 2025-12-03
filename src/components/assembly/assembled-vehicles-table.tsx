@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import {
   Table,
   TableBody,
@@ -31,6 +31,7 @@ import {
     AlertDialogTrigger,
   } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast";
+import { Timestamp } from "firebase/firestore";
 
 export function AssembledVehiclesTable() {
   const { assembledVehicles, getVehicleModel, deleteAssembledVehicle } = useInventory();
@@ -43,6 +44,12 @@ export function AssembledVehiclesTable() {
         title: "Vehicle Deleted",
         description: `The ${modelName} with chassis ${chassisNumber} has been deleted. ${restock ? 'Parts have been restocked.' : ''}`
     });
+  }
+
+  const formatDate = (date: any) => {
+    if (date instanceof Timestamp) return date.toDate().toLocaleDateString();
+    if (date instanceof Date) return date.toLocaleDateString();
+    return "N/A";
   }
 
   return (
@@ -77,7 +84,7 @@ export function AssembledVehiclesTable() {
                       <TableCell>{vehicle.chassisNumber}</TableCell>
                       <TableCell>{vehicle.motorNumber}</TableCell>
                       <TableCell>
-                        {vehicle.assemblyDate.toLocaleDateString()}
+                        {formatDate(vehicle.assemblyDate)}
                       </TableCell>
                       <TableCell className="text-right">
                         <AlertDialog>

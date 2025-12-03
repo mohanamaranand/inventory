@@ -18,7 +18,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { useInventory } from "@/context/inventory-context"
+import { useInventory } from "@/context/inventory-context-firebase"
 import { SOLD_STATUSES, ITEM_STATUSES } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 
@@ -47,7 +47,7 @@ export function SalesPurchasesChart() {
     }
 
     inventory.forEach(item => {
-      const itemDate = new Date(item.date);
+      const itemDate = item.date.toDate();
       const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
 
       if (monthDiff >= 0 && monthDiff < 12) {
@@ -57,7 +57,6 @@ export function SalesPurchasesChart() {
         if (SOLD_STATUSES.includes(item.itemStatus)) {
           data[monthIndex].sales += value;
         } else if (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') {
-            // This is a simplification; considers all non-sold as "purchase" in that month
             data[monthIndex].purchases += value;
         }
       }

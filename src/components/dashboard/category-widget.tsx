@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useMemo } from "react";
 import {
   Card,
@@ -22,9 +22,9 @@ export function CategoryWidget() {
 
   const categoryStats = useMemo(() => {
     const stats: Record<
-      ItemCategory,
+      string,
       { unitCount: number; uniqueItems: Set<string> }
-    > = {} as any;
+    > = {};
 
     inventory.forEach((item) => {
       const category = item.itemCategory;

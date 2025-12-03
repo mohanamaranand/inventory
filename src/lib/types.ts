@@ -1,3 +1,4 @@
+import { Timestamp } from 'firebase/firestore';
 
 export const ITEM_CATEGORIES = [
   'Vehicle Part',
@@ -37,10 +38,10 @@ export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
 export interface InventoryItem {
-  id: string; // S.No
+  id: string; // This will be the document ID from Firestore
   purchaseInvoiceNumber: string;
   vendorName: string;
-  date: Date;
+  date: Timestamp;
   itemStdCode: string;
   itemCategory: ItemCategory;
   productName: string;
@@ -70,7 +71,7 @@ export interface AssembledVehicle {
   modelId: string;
   chassisNumber: string;
   motorNumber: string;
-  assemblyDate: Date;
+  assemblyDate: Timestamp;
 }
 
 export interface BatteryPart {
@@ -88,7 +89,7 @@ export interface AssembledBattery {
     id: string;
     modelId: string;
     serialNumber: string;
-    assemblyDate: Date;
+    assemblyDate: Timestamp;
 }
 
 export interface Customer {

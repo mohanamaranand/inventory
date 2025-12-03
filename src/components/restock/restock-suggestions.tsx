@@ -1,13 +1,15 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { intelligentRestockSuggestions, type IntelligentRestockSuggestionsOutput } from "@/ai/flows/intelligent-restock-suggestions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb, Loader2, Package, Truck, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Timestamp } from "firebase/firestore";
 
 export function RestockSuggestions() {
   const { inventory } = useInventory();
@@ -17,12 +19,17 @@ export function RestockSuggestions() {
 
   useEffect(() => {
     const fetchSuggestions = async () => {
+      if (inventory.length === 0) {
+        setLoading(false);
+        setSuggestions([]);
+        return;
+      };
       setLoading(true);
       try {
         const inventoryForAI = inventory.map(item => ({
             ...item,
             salesData: item.salesData || [],
-            date: item.date.toISOString(),
+            date: item.date instanceof Timestamp ? item.date.toDate().toISOString() : item.date,
         }));
         
         const result = await intelligentRestockSuggestions(inventoryForAI);
