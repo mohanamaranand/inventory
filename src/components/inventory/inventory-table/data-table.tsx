@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ITEM_CATEGORIES, ITEM_STATUSES, InventoryItem } from "@/lib/types";
-import { useInventory } from "@/context/inventory-context";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 import {
