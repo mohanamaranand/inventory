@@ -57,7 +57,7 @@ const formSchema = z.object({
     required_error: "You need to select an item category.",
   }),
   productName: z.string().min(1, "Product name is required."),
-  productDetails: z.string().min(1, "Product details are required."),
+  productDetails: z.string(),
   quantity: z.coerce.number().int().min(0, "Quantity cannot be negative."),
   storageLocation: z.string().min(1, "Storage location is required."),
   unitPrice: z.coerce.number().min(0, "Unit price cannot be negative."),
