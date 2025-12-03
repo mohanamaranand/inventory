@@ -14,22 +14,34 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ItemCategory } from "@/lib/types";
 import { Badge } from "../ui/badge";
 import Link from "next/link";
-import { List } from "lucide-react";
+import { List, Boxes, Archive } from "lucide-react";
+import { Separator } from "../ui/separator";
 
 export function CategoryWidget() {
   const { inventory } = useInventory();
 
-  const categoryCounts = useMemo(() => {
-    const counts = inventory.reduce((acc, item) => {
-      const category = item.itemCategory;
-      acc[category] = (acc[category] || 0) + item.quantity;
-      return acc;
-    }, {} as Record<ItemCategory, number>);
+  const categoryStats = useMemo(() => {
+    const stats: Record<
+      ItemCategory,
+      { unitCount: number; uniqueItems: Set<string> }
+    > = {} as any;
 
-    return Object.entries(counts).map(([category, count]) => ({
-      category: category as ItemCategory,
-      count,
-    }));
+    inventory.forEach((item) => {
+      const category = item.itemCategory;
+      if (!stats[category]) {
+        stats[category] = { unitCount: 0, uniqueItems: new Set() };
+      }
+      stats[category].unitCount += item.quantity;
+      stats[category].uniqueItems.add(item.itemStdCode);
+    });
+
+    return Object.entries(stats)
+      .map(([category, data]) => ({
+        category: category as ItemCategory,
+        unitCount: data.unitCount,
+        itemCount: data.uniqueItems.size,
+      }))
+      .sort((a, b) => b.unitCount - a.unitCount);
   }, [inventory]);
 
   return (
@@ -41,18 +53,29 @@ export function CategoryWidget() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
-        {categoryCounts.length > 0 ? (
-          <ScrollArea className="h-full">
+        {categoryStats.length > 0 ? (
+          <ScrollArea className="h-full pr-4">
             <div className="space-y-4">
-              {categoryCounts.map(({ category, count }) => (
-                <Link
-                  key={category}
-                  href={`/inventory?category=${encodeURIComponent(category)}`}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted"
-                >
-                  <p className="font-medium text-sm">{category}</p>
-                  <Badge variant="secondary">{count}</Badge>
-                </Link>
+              {categoryStats.map(({ category, unitCount, itemCount }, index) => (
+                <div key={category}>
+                  <Link
+                    href={`/inventory?category=${encodeURIComponent(category)}`}
+                    className="block p-2 rounded-md hover:bg-muted"
+                  >
+                    <p className="font-medium text-sm mb-2">{category}</p>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2" title="Total number of unique items">
+                            <Boxes className="h-4 w-4 text-blue-500" />
+                            <span>{itemCount} Item Types</span>
+                        </div>
+                        <div className="flex items-center gap-2" title="Total quantity of all units">
+                            <Archive className="h-4 w-4 text-green-500" />
+                            <span>{unitCount} Total Units</span>
+                        </div>
+                    </div>
+                  </Link>
+                  {index < categoryStats.length - 1 && <Separator className="mt-4" />}
+                </div>
               ))}
             </div>
           </ScrollArea>
