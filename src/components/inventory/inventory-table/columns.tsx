@@ -125,7 +125,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     accessorKey: "itemStatus",
     header: "Status",
     cell: function Cell({ row }) {
-      const { updateItem, splitItem } = useInventory();
+      const { splitItem } = useInventory();
       const { toast } = useToast();
       const item = row.original;
       const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
@@ -134,15 +134,16 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
 
       const handleStatusChange = (status: ItemStatus) => {
         if (status !== item.itemStatus) {
+            setNewStatus(status);
             if (item.quantity > 1) {
-              setNewStatus(status);
               setSplitQuantity(1); // Default to 1
               setIsSplitDialogOpen(true);
             } else {
-              updateItem(item.id, { itemStatus: status });
-              toast({
-                  title: "Status Updated",
-                  description: `"${item.productName}" status changed to ${status}.`,
+              // If quantity is 1, just split the whole item
+              splitItem(item.id, status, 1);
+               toast({
+                  title: "Item Status Updated",
+                  description: `"${item.productName}" has been moved to ${status}.`,
               });
             }
         }
