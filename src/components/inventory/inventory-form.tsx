@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -104,7 +105,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
-        date: editingItem.date, // No longer need .toDate()
+        date: editingItem.date,
         splitQuantity: 0,
       });
     } else {
@@ -128,27 +129,32 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-        if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
-            if (!editingItem || values.splitQuantity > editingItem.quantity) {
+        const submissionValues = {
+            ...values,
+            imageUrl: values.imageUrl || '',
+        };
+
+        if (showSplit && submissionValues.splitQuantity && submissionValues.splitQuantity > 0) {
+            if (!editingItem || submissionValues.splitQuantity > editingItem.quantity) {
               form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
               return;
             }
-            await splitItem(editingItem.id, values.itemStatus!, values.splitQuantity);
-            toast({ title: "Item Split", description: `${values.splitQuantity} units of "${values.productName}" moved to status "${values.itemStatus}".` });
+            await splitItem(editingItem.id, submissionValues.itemStatus!, submissionValues.splitQuantity);
+            toast({ title: "Item Split", description: `${submissionValues.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
           } else if (editingItem && itemId) {
-            const { splitQuantity, ...updateData } = values;
+            const { splitQuantity, ...updateData } = submissionValues;
             await updateItem(itemId, {
                 ...updateData,
-                date: Timestamp.fromDate(values.date)
+                date: Timestamp.fromDate(submissionValues.date)
             });
-            toast({ title: "Item Updated", description: `"${values.productName}" has been updated.` });
+            toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
           } else {
-            const { splitQuantity, ...addData } = values;
+            const { splitQuantity, ...addData } = submissionValues;
             await addItem({
                 ...addData,
-                date: Timestamp.fromDate(values.date)
+                date: Timestamp.fromDate(submissionValues.date)
             });
-            toast({ title: "Item Added", description: `"${values.productName}" has been added to inventory.` });
+            toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
           }
           onFormSubmit();
     } catch (error) {
@@ -444,3 +450,5 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
+
+    
