@@ -51,16 +51,16 @@ export function StatusWidget() {
   }, [inventory]);
 
   return (
-    <Card className="shadow-md h-full">
+    <Card className="shadow-md flex flex-col">
       <CardHeader>
         <CardTitle>Inventory by Status</CardTitle>
         <CardDescription>
           A summary of items based on their current status.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         {statusCounts.length > 0 ? (
-          <ScrollArea className="h-48 pr-4">
+          <ScrollArea className="h-full pr-4">
             <div className="space-y-2">
               {statusCounts.map(({ status, count }) => (
                 <Link
@@ -77,7 +77,7 @@ export function StatusWidget() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center h-48">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center h-full">
             <List className="mx-auto h-10 w-10 text-muted-foreground" />
              <p className="mt-4 text-sm font-medium">No Inventory Found</p>
             <p className="text-xs text-muted-foreground">

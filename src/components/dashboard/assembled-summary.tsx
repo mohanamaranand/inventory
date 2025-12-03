@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Wrench, Battery, CheckCircle } from "lucide-react";
-import { Separator } from "../ui/separator";
 
 export function AssembledSummary() {
   const { assembledVehicles, getVehicleModel, assembledBatteries, getBatteryModel } = useInventory();
@@ -48,16 +47,16 @@ export function AssembledSummary() {
   }, [assembledVehicles, getVehicleModel, assembledBatteries, getBatteryModel]);
 
   return (
-    <Card className="shadow-md h-full">
+    <Card className="shadow-md flex flex-col">
       <CardHeader>
         <CardTitle>Assembled Products</CardTitle>
         <CardDescription>
           Total units built for each model.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         {assemblyStats.length > 0 ? (
-          <ScrollArea className="pr-4">
+          <ScrollArea className="h-full pr-4">
             <div className="space-y-4">
               {assemblyStats.map((stats, index) => (
                 <div key={index} className="flex items-center justify-between text-sm">

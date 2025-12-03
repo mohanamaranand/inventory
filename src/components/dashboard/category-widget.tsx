@@ -33,16 +33,16 @@ export function CategoryWidget() {
   }, [inventory]);
 
   return (
-    <Card className="shadow-md h-full">
+    <Card className="shadow-md flex flex-col">
       <CardHeader>
         <CardTitle>Inventory by Category</CardTitle>
         <CardDescription>
           A breakdown of items by their assigned category.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         {categoryCounts.length > 0 ? (
-          <ScrollArea>
+          <ScrollArea className="h-full">
             <div className="space-y-4">
               {categoryCounts.map(({ category, count }) => (
                 <Link
@@ -57,7 +57,7 @@ export function CategoryWidget() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center h-full">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed h-full">
             <List className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
               No inventory items to display.

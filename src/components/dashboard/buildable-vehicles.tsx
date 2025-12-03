@@ -45,16 +45,16 @@ export function BuildableVehicles() {
   }, [vehicleModels, batteryModels, getItemByStdCode]);
 
   return (
-    <Card className="shadow-md h-full">
+    <Card className="shadow-md flex flex-col">
       <CardHeader>
         <CardTitle>Production Capacity</CardTitle>
         <CardDescription>
           How many of each model you can build with current parts inventory.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         {buildableStats.length > 0 ? (
-          <ScrollArea className="h-[200px] pr-4">
+          <ScrollArea className="h-full pr-4">
             <div className="space-y-4">
               {buildableStats.map((stats, index) => (
                 <div key={index}>
@@ -74,7 +74,7 @@ export function BuildableVehicles() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center min-h-[200px]">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed text-center h-full">
             <Wrench className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-4 text-sm font-medium">No Models Found</p>
             <p className="text-xs text-muted-foreground">
