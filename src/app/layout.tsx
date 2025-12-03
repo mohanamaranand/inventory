@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import AppLayout from '@/components/layout/app-layout';
-import { InventoryProvider } from '@/context/inventory-context-firebase';
 import { Suspense } from 'react';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
@@ -29,9 +28,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <Suspense fallback={<div>Loading...</div>}>
           <FirebaseClientProvider>
-            <InventoryProvider>
-              <AppLayout>{children}</AppLayout>
-            </InventoryProvider>
+            <AppLayout>{children}</AppLayout>
           </FirebaseClientProvider>
         </Suspense>
         <Toaster />
