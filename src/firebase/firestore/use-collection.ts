@@ -9,6 +9,7 @@ import {
   type DocumentData,
   type Firestore,
   type WhereFilterOp,
+  Timestamp,
 } from 'firebase/firestore';
 import { useFirestore } from '..';
 
@@ -28,21 +29,27 @@ export function useCollection<T>(
   const db = useFirestore();
 
   const q = useMemo(() => {
+    if (!db) return null;
     const constraints = queryConstraints.map((c) => where(c.field, c.operator, c.value));
     return query(collection(db, collectionName), ...constraints);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, collectionName, JSON.stringify(queryConstraints)]);
 
   useEffect(() => {
+    if (!q) {
+      setLoading(false);
+      return;
+    };
+    
     setLoading(true);
     const unsubscribe = onSnapshot(
       q,
       (querySnapshot) => {
         const documents = querySnapshot.docs.map((doc) => {
           const docData = doc.data();
-          // Convert Timestamps to Dates
+          
           Object.keys(docData).forEach(key => {
-            if (docData[key] instanceof Object && 'seconds' in docData[key] && 'nanoseconds' in docData[key]) {
+            if (docData[key] instanceof Timestamp) {
               docData[key] = docData[key].toDate();
             }
           });

@@ -104,7 +104,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
-        date: editingItem.date.toDate(),
+        date: editingItem.date, // No longer need .toDate()
         splitQuantity: 0,
       });
     } else {

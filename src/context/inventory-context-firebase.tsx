@@ -59,10 +59,10 @@ interface SaleData {
 interface InventoryContextType extends AllData {
   loading: boolean;
   addItem: (
-    item: Omit<InventoryItem, 'id'>
+    item: Omit<InventoryItem, 'id' | 'itemStatus'>
   ) => Promise<void>;
   addBatchItems: (
-    items: Omit<InventoryItem, 'id'>[]
+    items: Omit<InventoryItem, 'id' | 'itemStatus'>[]
   ) => Promise<void>;
   updateItem: (
     id: string,
@@ -149,32 +149,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     await runTransaction(db, async (transaction) => {
         for (const item of items) {
-            const q = query(
+             const q = query(
                 getCollectionRef('inventory'),
                 where('itemStdCode', '==', item.itemStdCode),
-                where('itemStatus', '==', item.itemStatus),
+                where('itemStatus', '==', 'In Stock'),
                 where('productDetails', '==', item.productDetails),
-                where('salesInvoiceNumber', '==', item.salesInvoiceNumber || ''),
                 where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
                 limit(1)
             );
 
             const querySnapshot = await getDocs(q);
-            
+
             if (!querySnapshot.empty) {
-                // Found an existing item, so update its quantity
                 const existingDoc = querySnapshot.docs[0];
                 const existingData = existingDoc.data() as InventoryItem;
                 const newQuantity = existingData.quantity + item.quantity;
                 transaction.update(existingDoc.ref, { quantity: newQuantity });
             } else {
-                // No existing item found, so create a new one
                 const newDocRef = doc(getCollectionRef('inventory'));
-                transaction.set(newDocRef, {
-                    ...item,
-                    date: item.date instanceof Date ? Timestamp.fromDate(item.date) : item.date,
-                    salesInvoiceNumber: item.salesInvoiceNumber || ''
-                });
+                transaction.set(newDocRef, { ...item, itemStatus: 'In Stock' });
             }
         }
     });
@@ -215,13 +208,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             salesInvoiceNumber: newStatus.includes('Sold') ? itemToSplit.salesInvoiceNumber : '',
         };
 
-        // Before creating a new item, check if an identical one already exists
         const q = query(
             getCollectionRef('inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
             where('productDetails', '==', newDocPayload.productDetails),
-            where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
             limit(1)
         );
@@ -229,29 +220,24 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-            // Found a match, update quantity
             const existingDoc = querySnapshot.docs[0];
             const existingData = existingDoc.data() as InventoryItem;
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
-            // No match, create new doc
             const newDocRef = doc(collection(db, 'inventory'));
             transaction.set(newDocRef, newDocPayload);
         }
 
-        // Update the original item's quantity
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
             transaction.update(itemDocRef, { quantity: remainingQuantity });
         } else {
-            // If the original item has no quantity left, delete it
             transaction.delete(itemDocRef);
         }
       });
   }, [db]);
 
   const deleteItem = async (id: string, restock: boolean = false) => {
-    // This is complex, will implement with assembled items
     await deleteDoc(doc(db, 'inventory', id));
   };
   
@@ -283,7 +269,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Vehicle model or its parts not found.");
       }
   
-      // Check part availability first
       for (const part of model.parts) {
         const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
         const itemSnapshot = await getDocs(itemQuery);
@@ -292,7 +277,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
       }
   
-      // Deduct parts from inventory
       for (const part of model.parts) {
         const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
         const itemSnapshot = await getDocs(itemQuery);
@@ -307,14 +291,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
       }
   
-      // Create assembled vehicle record
       const assembledVehicleRef = doc(collection(db, 'assembledVehicles'));
       transaction.set(assembledVehicleRef, {
         ...vehicleData,
         assemblyDate: serverTimestamp(),
       });
   
-      // Create new inventory item for the assembled vehicle
       const totalCost = model.parts.reduce((sum, part) => {
           const item = getItemByStdCode(part.itemStdCode);
           return sum + (item ? item.unitPrice * part.quantity : 0);
@@ -357,9 +339,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                     if (item) {
                         const itemRef = doc(db, 'inventory', item.id);
                         transaction.update(itemRef, { quantity: item.quantity + part.quantity });
-                    } else {
-                        // If item doesn't exist, we might need to create it. This part is complex.
-                        // For now, we assume base parts exist. A more robust solution is needed for production.
                     }
                 }
             }
