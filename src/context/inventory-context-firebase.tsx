@@ -216,7 +216,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
             limit(1)
         );
-
+        
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
