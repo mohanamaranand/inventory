@@ -52,7 +52,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
     const { user } = useUser();
     const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
 
-    return [
+    const allColumns: ColumnDef<InventoryItem>[] = [
       {
         id: "select",
         header: ({ table }) => (
@@ -241,15 +241,20 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           return formatCurrency(quantity * unitPrice);
         },
       },
-      ...(isPrivilegedUser ? [{
-        accessorKey: "purchasePrice",
-        header: "Purchase Price",
-        cell: ({ row }: { row: any }) => {
-          const { quantity, purchasePrice } = row.original;
-          return formatCurrency(quantity * (purchasePrice || 0));
-        },
-      }] : []),
-      {
+    ];
+
+    if (isPrivilegedUser) {
+        allColumns.push({
+          accessorKey: "purchasePrice",
+          header: "Purchase Value",
+          cell: ({ row }) => {
+            const { quantity, purchasePrice } = row.original;
+            return formatCurrency(quantity * (purchasePrice || 0));
+          },
+        });
+    }
+
+    allColumns.push({
         id: "actions",
         cell: function Cell({ row }) {
           const { deleteItem } = useInventory();
@@ -298,7 +303,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={() => handleDelete(false)}>Delete Only</AlertDialogAction>
-                    <AlertDialogAction onClick={() => handleDelete(true)}>Delete & Restock</AlertDialogAction>
+                    <AlertDialogAction onClick={() => handleDelete(true)}>Delete & Restock Parts</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -329,7 +334,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           );
         },
       },
-    ]
-};
+    )
 
-    
+    return allColumns;
+};

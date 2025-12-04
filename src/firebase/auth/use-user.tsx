@@ -34,20 +34,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return doc(db, 'users', firebaseUser.uid);
   }, [db, firebaseUser]);
   
-  const { data: userProfile, isLoading: loadingProfile } = useDoc<User>(userDocRef);
+  const { data: userProfile, isLoading: loadingProfile } = useDoc<{ role: UserRole, displayName?: string }>(userDocRef);
 
   const user = useMemo(() => {
     if (!firebaseUser) return null;
     return {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
-      displayName: firebaseUser.displayName || userProfile?.displayName || firebaseUser.email,
+      displayName: userProfile?.displayName || firebaseUser.displayName || firebaseUser.email,
       photoURL: firebaseUser.photoURL,
       role: userProfile?.role || null,
     };
   }, [firebaseUser, userProfile]);
 
-  const loading = loadingAuth || loadingProfile;
+  const loading = loadingAuth || (firebaseUser && loadingProfile);
 
   return (
     <UserContext.Provider value={{ user, loading }}>

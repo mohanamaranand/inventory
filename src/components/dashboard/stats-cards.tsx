@@ -81,8 +81,11 @@ export function StatsCards() {
     },
   ].filter(Boolean);
 
+  // Adjust grid columns based on the number of items
+  const gridColsClass = `lg:grid-cols-${statItems.length}`;
+  
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+    <div className={`grid gap-4 md:grid-cols-2 ${gridColsClass}`}>
       {statItems.map((item) => (
         <Card key={item.title} className="shadow-md transition-all hover:shadow-lg hover:-translate-y-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -97,5 +100,3 @@ export function StatsCards() {
     </div>
   );
 }
-
-    

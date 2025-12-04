@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Header } from '@/components/layout/header';
@@ -92,6 +93,7 @@ export function InventoryPageContent() {
               row['Storage Location'] || row['storageLocation'] || ''
             ),
             unitPrice: Number(row['Unit Price'] || row['unitPrice'] || 0),
+            purchasePrice: Number(row['Purchase Price'] || row['purchasePrice'] || 0),
           };
 
           const existingItem = getItemByStdCode(itemData.itemStdCode);

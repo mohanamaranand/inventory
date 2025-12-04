@@ -484,4 +484,3 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
-    
