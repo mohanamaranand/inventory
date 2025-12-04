@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useMemo } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { User, UserRole } from '@/lib/types';
@@ -30,7 +30,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, [auth]);
   
   const userDocRef = useMemoFirebase(() => {
-    if (!firebaseUser) return null;
+    if (!db || !firebaseUser) return null;
     return doc(db, 'users', firebaseUser.uid);
   }, [db, firebaseUser]);
   
@@ -63,5 +63,3 @@ export const useUser = () => {
   }
   return context;
 };
-
-    
