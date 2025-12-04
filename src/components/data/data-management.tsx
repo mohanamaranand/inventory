@@ -25,7 +25,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Upload, Trash2, AlertTriangle } from "lucide-react";
+import { Download, Upload, Trash2, AlertTriangle, UserX } from "lucide-react";
 import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
 
@@ -39,6 +39,7 @@ export function DataManagement() {
     customers,
     clearAllData,
     restoreAllData,
+    deleteCurrentUser,
   } = useInventory();
   const { toast } = useToast();
   const [isRestoreAlertOpen, setRestoreAlertOpen] = useState(false);
@@ -156,6 +157,22 @@ export function DataManagement() {
       description: "The application has been reset to its initial state.",
     });
   };
+  
+  const handleDeleteSelf = async () => {
+    try {
+        await deleteCurrentUser();
+        toast({
+            title: "Account Deleted",
+            description: "Your account has been successfully deleted.",
+        });
+    } catch(e: any) {
+         toast({
+            variant: "destructive",
+            title: "Deletion Failed",
+            description: e.message || "Could not delete your account at this time.",
+        });
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -197,10 +214,10 @@ export function DataManagement() {
             These actions are irreversible. Please proceed with caution.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4 md:flex-row">
             <AlertDialog>
                 <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
+                    <Button variant="destructive" className="w-full md:w-auto">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Clear All Application Data
                     </Button>
@@ -219,6 +236,31 @@ export function DataManagement() {
                         onClick={handleClearData}
                     >
                         Yes, delete all data
+                    </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full md:w-auto">
+                        <UserX className="mr-2 h-4 w-4" />
+                        Delete My Account
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action is permanent and will delete your authentication record and user profile. You will be logged out immediately.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        className="bg-destructive hover:bg-destructive/90"
+                        onClick={handleDeleteSelf}
+                    >
+                        Yes, delete my account
                     </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

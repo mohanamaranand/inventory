@@ -24,7 +24,8 @@ import {
   limit,
 } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth, useFirestore, useMemoFirebase } from '@/firebase';
+import { deleteUser } from 'firebase/auth';
 
 import type {
   InventoryItem,
@@ -81,6 +82,7 @@ interface InventoryContextType extends AllData {
   ) => Promise<void>;
   deleteItem: (id: string, restock?: boolean) => Promise<void>;
   deleteMultipleItems: (ids: string[], restock?: boolean) => Promise<void>;
+  deleteCurrentUser: () => Promise<void>;
   getItem: (id: string) => InventoryItem | undefined;
   getItemByStdCode: (stdCode: string) => InventoryItem | undefined;
 
@@ -128,6 +130,7 @@ const InventoryContext = createContext<InventoryContextType | undefined>(
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const db = useFirestore();
+  const auth = useAuth();
 
   const inventoryQuery = useMemoFirebase(() => db ? collection(db, 'inventory') : null, [db]);
   const vehicleModelsQuery = useMemoFirebase(() => db ? collection(db, 'vehicleModels') : null, [db]);
@@ -296,6 +299,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
     await batch.commit();
   };
+
+  const deleteCurrentUser = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error("No user is currently signed in.");
+    }
+    await runTransaction(db, async (transaction) => {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        transaction.delete(userDocRef);
+    });
+    await deleteUser(currentUser);
+  }
 
 
   const getItem = useCallback((id: string) => {
@@ -625,6 +640,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       splitItem,
       deleteItem,
       deleteMultipleItems,
+      deleteCurrentUser,
       getItem,
       getItemByStdCode,
       addVehicleModel,
@@ -658,11 +674,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getVehicleModel,
       getBatteryModel,
       getCustomer,
-      addItem,
       addBatchItems,
       splitItem,
       editAndMergeItem,
-      deleteItem, deleteMultipleItems, updateItem, addVehicleModel, updateVehicleModel, assembleVehicle, deleteAssembledVehicle, addBatteryModel, updateBatteryModel, assembleBattery, deleteAssembledBattery, addCustomer, updateCustomer, deleteCustomer, processSale, clearAllData, restoreAllData
+      deleteMultipleItems, 
+      updateItem, 
+      addVehicleModel, 
+      updateVehicleModel, 
+      assembleVehicle, 
+      deleteAssembledVehicle, 
+      addBatteryModel, 
+      updateBatteryModel, 
+      assembleBattery, 
+      deleteAssembledBattery, 
+      addCustomer, 
+      updateCustomer, 
+      deleteCustomer, 
+      processSale, 
+      clearAllData, 
+      restoreAllData,
+      addItem,
+      deleteItem,
+      deleteCurrentUser
     ]
   );
 
@@ -680,5 +713,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
