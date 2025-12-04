@@ -43,7 +43,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       email: firebaseUser.email,
       displayName: userProfile?.displayName || firebaseUser.displayName || firebaseUser.email,
       photoURL: firebaseUser.photoURL,
-      role: userProfile?.role || null,
+      role: userProfile?.role || 'employee',
     };
   }, [firebaseUser, userProfile]);
 

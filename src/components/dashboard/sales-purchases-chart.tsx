@@ -21,6 +21,7 @@ import {
 import { useInventory } from "@/context/inventory-context-firebase"
 import { SOLD_STATUSES } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { Timestamp } from "firebase/firestore"
 
 const chartConfig = {
   sales: {
@@ -51,18 +52,23 @@ export function SalesPurchasesChart() {
 
     inventory.forEach(item => {
         if (!item.date) return;
-        const itemDate = item.date; // No longer calling .toDate()
+        
+        const itemDate = item.date instanceof Timestamp ? item.date.toDate() : new Date(item.date);
+        
         const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
 
         if (monthDiff >= 0 && monthDiff < 12) {
             const monthIndex = 11 - monthDiff;
             if (data[monthIndex]) {
-                const value = item.quantity * item.unitPrice;
+                const saleValue = item.quantity * item.unitPrice;
+                const purchaseValue = item.quantity * (item.purchasePrice || 0);
                 
                 if (SOLD_STATUSES.includes(item.itemStatus)) {
-                data[monthIndex].sales += value;
-                } else if (item.itemStatus === 'In Stock' || item.itemStatus === 'Assembled') {
-                    data[monthIndex].purchases += value;
+                  data[monthIndex].sales += saleValue;
+                } else if (item.purchasePrice && item.purchasePrice > 0) {
+                    // This logic assumes items coming in are 'purchases'.
+                    // More specific logic might be needed if items can be added without being a purchase.
+                    data[monthIndex].purchases += purchaseValue;
                 }
             }
         }

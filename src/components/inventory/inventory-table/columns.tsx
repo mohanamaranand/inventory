@@ -172,7 +172,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
             setSplitQuantity("");
           }
           
-          if (item.itemCategory === 'Assembled Vehicle') {
+          if (item.itemCategory === 'Assembled Vehicle' || item.itemCategory === 'Assembled Battery') {
             return <Badge variant="default">{item.itemStatus}</Badge>;
           }
 
