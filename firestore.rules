@@ -1,41 +1,4 @@
-/**
- * Core Philosophy: This ruleset enforces a hybrid security model. User-specific data,
- * like inventory items, is protected by a strict ownership model, ensuring users can
- * only access their own information. This is supplemented by a global role-based
- * access control (RBAC) system for administrators, granting them privileged access
- * for management purposes.
- *
- * Data Structure: The data is organized into two main top-level collections:
- *   - `/users/{userId}`: Contains user-specific subcollections.
- *   - `/users/{userId}/inventory_items`: A subcollection holding inventory items,
- *     where the path itself determines ownership.
- *   - `/roles_admin`: A top-level collection that manages administrator roles.
- *     The existence of a user's UID as a document ID in this collection grants
- *     them admin privileges.
- *
- * Key Security Decisions:
- *   - User Data Isolation: Users are strictly confined to their own data tree under
- *     `/users/{userId}`. They cannot read or write to another user's data unless they
- *     are an administrator.
- *   - Admin Override: Users with an 'admin' role (defined in `/roles_admin`) have
- *     full read and write access to all user inventory data.
- *   - Role Management Security: The `/roles_admin` collection is protected. Only existing
- *     administrators can view, add, or remove other administrators.
- *   - No Public Listing: Listing users or all inventory items across the entire
- *     database is explicitly disallowed to protect user privacy.
- *
- * Denormalization for Authorization:
- *   - Path-Based Ownership: The primary security mechanism for inventory items relies
- *     on the path `/users/{userId}/...`. This avoids costly `get()` calls to check
- *     ownership, making rules fast and simple.
- *   - Role Collection: Admin roles are managed in a `/roles_admin` collection.
- *     This allows for a single, efficient `exists()` check to determine if a user
- *     is an admin, avoiding the need for complex queries or custom claims.
- *
- * Structural Segregation: This pattern is not required as there is no mixed
- * public/private data within the same collection. User data is inherently private
- * and segregated by the `/users/{userId}` path structure.
- */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -44,97 +7,51 @@ service cloud.firestore {
     // Helper Functions
     // ------------------------------------------------------------------------
 
-    /**
-     * Returns true if the user is authenticated.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * Returns true if the authenticated user's UID matches the provided userId.
-     * This is the primary function for enforcing data ownership.
-     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /**
-     * Returns true if the authenticated user is an administrator.
-     * Admin status is granted if a document with the user's UID exists in the
-     * /roles_admin collection.
-     */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    /**
-     * Returns true if the incoming data for a create operation has a 'userId'
-     * field that matches the document's path owner.
-     * This ensures data consistency between the path and the document content.
-     */
-    function hasCorrectOwnerOnCreate(userId) {
-      return request.resource.data.userId == userId;
-    }
-
-    /**
-     * Returns true if an update operation does not change the 'userId' field.
-     * This makes the ownership link immutable.
-     */
-    function ownerIsImmutable() {
-      return request.resource.data.userId == resource.data.userId;
+        // Check for 'owner' or 'administrator' role in custom claims
+        return isSignedIn() && (request.auth.token.role == 'owner' || request.auth.token.role == 'administrator');
     }
 
     // ------------------------------------------------------------------------
-    // User Data Rules
+    // Public Read, Authenticated Write Collections
     // ------------------------------------------------------------------------
-
-    /**
-     * @description Controls access to a user's root document. Allows users to create
-     *              and manage their own profile document but not others'.
-     * @path /users/{userId}
-     * @allow (create) An authenticated user creating their own user document: `auth.uid == 'user_abc'`, `path == /users/user_abc`.
-     * @deny  (get) A user trying to read another user's document: `auth.uid == 'user_123'`, `path == /users/user_abc`.
-     * @principle Restricts access to a user's own data tree (Self-Creation pattern).
-     */
-    match /users/{userId} {
-      allow get, list, update: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow delete: if false; // User documents should generally not be deleted by the user.
+    
+    match /inventory/{itemId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /vehicleModels/{modelId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
-    /**
-     * @description Secures inventory items within a user's private subcollection.
-     *              Grants full control to the document owner and global admins.
-     * @path /users/{userId}/inventory_items/{itemId}
-     * @allow (create) The owner creating an item in their own collection: `auth.uid == 'user_abc'`, `path == /users/user_abc/inventory_items/item_1`.
-     * @allow (get) An admin reading another user's item: `auth.uid == 'admin_xyz'`, `/roles_admin/admin_xyz` exists, `path == /users/user_abc/inventory_items/item_1`.
-     * @deny  (update) A non-owner/non-admin trying to modify an item: `auth.uid == 'user_123'`, `path == /users/user_abc/inventory_items/item_1`.
-     * @principle Enforces document ownership for all operations, with an admin override for management. Validates relational integrity on writes.
-     */
-    match /users/{userId}/inventory_items/{itemId} {
-      allow get, list: if isOwner(userId) || isAdmin();
-      allow create: if (isOwner(userId) || isAdmin()) && hasCorrectOwnerOnCreate(userId);
-      allow update: if (isOwner(userId) || isAdmin()) && resource != null && ownerIsImmutable();
-      allow delete: if (isOwner(userId) || isAdmin()) && resource != null;
+    match /assembledVehicles/{vehicleId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
-    // ------------------------------------------------------------------------
-    // Role Management Rules
-    // ------------------------------------------------------------------------
+    match /batteryModels/{modelId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
 
-    /**
-     * @description Manages access to the administrator roles collection. Only
-     *              existing admins can read or modify role assignments.
-     * @path /roles_admin/{userId}
-     * @allow (get) An admin checking if another user is an admin: `auth.uid == 'admin_abc'`, `/roles_admin/admin_abc` exists, `path == /roles_admin/user_123`.
-     * @deny  (create) A non-admin trying to make themselves an admin: `auth.uid == 'user_123'`, `path == /roles_admin/user_123`.
-     * @principle Secures role management by restricting it to privileged users (admins).
-     */
-    match /roles_admin/{userId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update, delete: if isAdmin() && resource != null;
+    match /assembledBatteries/{batteryId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /customers/{customerId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }
