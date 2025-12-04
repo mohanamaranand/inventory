@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { InventoryItem, ItemStatus } from "@/lib/types";
-import { ITEM_STATUSES } from "@/lib/types";
+import { ITEM_STATUSES, SOLD_STATUSES } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
@@ -43,6 +43,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser } from "@/firebase/auth/use-user";
+import { Timestamp } from "firebase/firestore";
+import { format } from "date-fns";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
@@ -228,6 +230,19 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
         filterFn: (row, id, value) => {
           return value.includes(row.getValue(id));
         },
+      },
+      {
+        accessorKey: "salesDate",
+        header: "Date Sold",
+        cell: ({ row }) => {
+          const item = row.original;
+          if (!SOLD_STATUSES.includes(item.itemStatus) || !item.salesDate) {
+            return <span className="text-muted-foreground">-</span>;
+          }
+          const date = item.salesDate;
+          const jsDate = date instanceof Timestamp ? date.toDate() : date;
+          return <span>{format(jsDate, "PPP")}</span>;
+        }
       },
       {
         accessorKey: "quantity",
