@@ -24,7 +24,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useMemoFirebase } from '@/firebase';
 
 import type {
   InventoryItem,
@@ -63,7 +63,7 @@ interface InventoryContextType extends AllData {
     item: Omit<InventoryItem, 'id'>
   ) => Promise<void>;
   addBatchItems: (
-    items: Omit<InventoryItem, 'id'>[]
+    items: Omit<InventoryItem, 'id' | 'itemStatus'>[]
   ) => Promise<void>;
   updateItem: (
     id: string,
@@ -129,18 +129,27 @@ const InventoryContext = createContext<InventoryContextType | undefined>(
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const db = useFirestore();
 
-  const { data: inventory, loading: loadingInventory } =
-    useCollection<InventoryItem>('inventory');
-  const { data: vehicleModels, loading: loadingVehicleModels } =
-    useCollection<VehicleModel>('vehicleModels');
-  const { data: assembledVehicles, loading: loadingAssembledVehicles } =
-    useCollection<AssembledVehicle>('assembledVehicles');
-  const { data: batteryModels, loading: loadingBatteryModels } =
-    useCollection<BatteryModel>('batteryModels');
-  const { data: assembledBatteries, loading: loadingAssembledBatteries } =
-    useCollection<AssembledBattery>('assembledBatteries');
-  const { data: customers, loading: loadingCustomers } =
-    useCollection<Customer>('customers');
+  const inventoryQuery = useMemoFirebase(() => db ? collection(db, 'inventory') : null, [db]);
+  const vehicleModelsQuery = useMemoFirebase(() => db ? collection(db, 'vehicleModels') : null, [db]);
+  const assembledVehiclesQuery = useMemoFirebase(() => db ? collection(db, 'assembledVehicles') : null, [db]);
+  const batteryModelsQuery = useMemoFirebase(() => db ? collection(db, 'batteryModels') : null, [db]);
+  const assembledBatteriesQuery = useMemoFirebase(() => db ? collection(db, 'assembledBatteries') : null, [db]);
+  const customersQuery = useMemoFirebase(() => db ? collection(db, 'customers') : null, [db]);
+
+  const { data: inventoryData, loading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
+  const { data: vehicleModelsData, loading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
+  const { data: assembledVehiclesData, loading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesQuery);
+  const { data: batteryModelsData, loading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
+  const { data: assembledBatteriesData, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
+  const { data: customersData, loading: loadingCustomers } = useCollection<Customer>(customersQuery);
+
+  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, date: item.date instanceof Timestamp ? item.date.toDate() : item.date })), [inventoryData]);
+  const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
+  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledVehiclesData]);
+  const batteryModels = useMemo(() => batteryModelsData || [], [batteryModelsData]);
+  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledBatteriesData]);
+  const customers = useMemo(() => customersData || [], [customersData]);
+
 
   const loading =
     loadingInventory ||
@@ -152,51 +161,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getCollectionRef = (name: string) => collection(db, name);
 
-  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
+  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
     if (!db) return;
-    await runTransaction(db, async (transaction) => {
-        for (const item of items) {
-             const q = query(
-                getCollectionRef('inventory'),
-                where('itemStdCode', '==', item.itemStdCode),
-                where('itemStatus', '==', item.itemStatus),
-                where('productDetails', '==', item.productDetails || ''),
-                where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
-                limit(1)
-            );
-
-            // Cannot run getDocs in a transaction. We will need to rethink this.
-            // Let's query first and then run transaction. This is not ideal but a limitation.
-        }
-    });
-
-    // The above is not correct. We must query outside transaction
+  
     for (const item of items) {
+      await runTransaction(db, async (transaction) => {
         const q = query(
-            getCollectionRef('inventory'),
-            where('itemStdCode', '==', item.itemStdCode),
-            where('itemStatus', '==', item.itemStatus),
-            where('productDetails', '==', item.productDetails || ''),
-            where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
-            limit(1)
+          getCollectionRef('inventory'),
+          where('itemStdCode', '==', item.itemStdCode),
+          where('itemStatus', '==', 'In Stock'),
+          where('productDetails', '==', item.productDetails || ''),
+          where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
+          limit(1)
         );
+  
         const querySnapshot = await getDocs(q);
-
+  
         if (!querySnapshot.empty) {
-            const existingDoc = querySnapshot.docs[0];
-            const existingData = existingDoc.data() as InventoryItem;
-            const newQuantity = existingData.quantity + item.quantity;
-            await updateDoc(existingDoc.ref, { quantity: newQuantity });
+          const existingDoc = querySnapshot.docs[0];
+          const existingData = existingDoc.data() as InventoryItem;
+          const newQuantity = existingData.quantity + item.quantity;
+          transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
-            await addDoc(getCollectionRef('inventory'), { ...item, itemStatus: item.itemStatus || 'In Stock' });
+          const docRef = doc(getCollectionRef('inventory'));
+          transaction.set(docRef, { ...item, itemStatus: 'In Stock' });
         }
+      });
     }
-
-
   }, [db]);
   
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    await addBatchItems([{...item, itemStatus: 'In Stock'}]);
+    await addBatchItems([item]);
   }, [addBatchItems]);
 
 
@@ -210,11 +205,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
      await runTransaction(db, async (transaction) => {
-        // 1. Delete the original document.
         const originalDocRef = doc(db, 'inventory', id);
         transaction.delete(originalDocRef);
 
-        // 2. Find a potential document to merge with.
         const q = query(
           getCollectionRef('inventory'),
           where('itemStdCode', '==', updatedItemData.itemStdCode),
@@ -308,7 +301,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const getItem = useCallback((id: string) => {
       const item = inventory.find((item) => item.id === id);
       if (item) {
-        // The useCollection hook already converts Timestamps to Dates.
         return item;
       }
       return undefined;
@@ -377,6 +369,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           storageLocation: 'Finished Goods',
           date: serverTimestamp() as Timestamp,
           imageUrl: '',
+          purchasePrice: 0,
       };
       
       const newInventoryItemRef = doc(collection(db, 'inventory'));
@@ -475,6 +468,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         storageLocation: 'Finished Goods',
         date: serverTimestamp() as Timestamp,
         imageUrl: '',
+        purchasePrice: 0,
     };
     const newInventoryItemRef = doc(collection(db, 'inventory'));
     transaction.set(newInventoryItemRef, assembledItem);
@@ -686,3 +680,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
