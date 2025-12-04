@@ -1,21 +1,25 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import * as XLSX from "xlsx";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Upload, Download } from "lucide-react";
 import { CustomerForm } from "./customer-form";
 import { DataTable } from "./customer-table/data-table";
 import { columns } from "./customer-table/columns";
 import { PurchaseHistoryDrawer } from "./purchase-history-drawer";
 import type { Customer, InventoryItem } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 export function CustomerClient() {
-  const { customers, inventory } = useInventory();
+  const { customers, inventory, addBatchCustomers } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [purchaseHistoryCustomer, setPurchaseHistoryCustomer] = useState<Customer | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleAddCustomer = () => {
     setEditingCustomerId(null);
@@ -41,10 +45,93 @@ export function CustomerClient() {
     return inventory.filter(item => item.customerId === purchaseHistoryCustomer.id);
   }, [inventory, purchaseHistoryCustomer]);
 
+  const handleExport = () => {
+    const worksheet = XLSX.utils.json_to_sheet(customers.map(({id, ...rest}) => rest));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Customers");
+    XLSX.writeFile(workbook, "customers.xlsx");
+    toast({
+      title: "Customers Exported",
+      description: "Your customer list has been downloaded.",
+    });
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        const newCustomers = json.filter(row => {
+          const name = row['name'] || row['Name'];
+          // Simple validation and check for existence
+          return name && !customers.some(c => c.name.toLowerCase() === name.toLowerCase());
+        }).map(row => ({
+          name: row['name'] || row['Name'],
+          contactPerson: row['contactPerson'] || row['Contact Person'],
+          phone: String(row['phone'] || row['Phone']),
+          email: row['email'] || row['Email'],
+          address: row['address'] || row['Address'],
+        }));
+        
+        if (newCustomers.length > 0) {
+          await addBatchCustomers(newCustomers);
+           toast({
+            title: "Import Successful",
+            description: `${newCustomers.length} new customers have been added.`,
+          });
+        } else {
+           toast({
+            title: "No New Customers",
+            description: "The imported file does not contain any new customers.",
+          });
+        }
+
+      } catch (error) {
+         toast({
+          variant: "destructive",
+          title: "Import Failed",
+          description: "There was an error processing the Excel file.",
+        });
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end mb-4 gap-2">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept=".xlsx, .xls"
+        />
+        <Button variant="outline" onClick={handleImportClick}>
+          <Upload className="mr-2 h-4 w-4" />
+          Import
+        </Button>
+         <Button variant="outline" onClick={handleExport}>
+          <Download className="mr-2 h-4 w-4" />
+          Export
+        </Button>
         <Button onClick={handleAddCustomer}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Customer

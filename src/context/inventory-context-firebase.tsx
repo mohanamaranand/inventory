@@ -111,6 +111,7 @@ interface InventoryContextType extends AllData {
   deleteAssembledBattery: (id: string, restock?: boolean) => Promise<void>;
 
   addCustomer: (customer: Omit<Customer, 'id'>) => Promise<void>;
+  addBatchCustomers: (customers: Omit<Customer, 'id'>[]) => Promise<void>;
   updateCustomer: (
     id: string,
     updatedCustomer: Partial<Customer>
@@ -524,6 +525,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const addCustomer = async (customer: Omit<Customer, 'id'>) => {
       await addDoc(getCollectionRef('customers'), customer);
   };
+  const addBatchCustomers = async (customers: Omit<Customer, 'id'>[]) => {
+    const batch = writeBatch(db);
+    customers.forEach(customer => {
+        const docRef = doc(getCollectionRef('customers'));
+        batch.set(docRef, customer);
+    });
+    await batch.commit();
+  };
   const updateCustomer = async (id: string, updatedCustomer: Partial<Customer>) => {
       await updateDoc(doc(db, 'customers', id), updatedCustomer);
   };
@@ -656,6 +665,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       assembleBattery,
       deleteAssembledBattery,
       addCustomer,
+      addBatchCustomers,
       updateCustomer,
       deleteCustomer,
       getCustomer,
@@ -690,6 +700,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       assembleBattery, 
       deleteAssembledBattery, 
       addCustomer, 
+      addBatchCustomers,
       updateCustomer, 
       deleteCustomer, 
       processSale, 
