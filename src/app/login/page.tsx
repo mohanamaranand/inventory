@@ -65,7 +65,8 @@ export default function LoginPage() {
                 title: 'Account Created',
                 description: "You have been successfully signed up. Please sign in.",
             });
-            // Clear sign-up form
+            // Switch to sign-in tab after successful sign-up could be a good UX improvement,
+            // but for now, we just clear the form.
             setSignUpEmail('');
             setSignUpPassword('');
         } catch (error: any) {
@@ -134,4 +135,3 @@ export default function LoginPage() {
         </div>
     );
 }
-    
