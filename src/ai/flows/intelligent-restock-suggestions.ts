@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -16,15 +17,11 @@ const InventoryItemSchema = z.object({
   productName: z.string().describe('The name of the product.'),
   quantity: z.number().describe('The current quantity in stock.'),
   itemCategory: z.string().describe('The category of the item.'),
-  salesData: z.array(z.object({
-    date: z.string().describe('The date of the sale.'),
-    quantitySold: z.number().describe('The quantity sold on that date.'),
-  })).optional().describe('Historical sales data for the item.'),
   storageLocation: z.string().describe('The location where the item is stored.'),
 });
 
 // Define the input schema for the flow, which is an array of inventory items
-const IntelligentRestockSuggestionsInputSchema = z.array(InventoryItemSchema).describe('An array of inventory items with their details and sales history.');
+const IntelligentRestockSuggestionsInputSchema = z.array(InventoryItemSchema).describe('An array of inventory items with their details.');
 export type IntelligentRestockSuggestionsInput = z.infer<typeof IntelligentRestockSuggestionsInputSchema>;
 
 // Define the output schema for the flow, which is an array of restocking suggestions
@@ -50,17 +47,11 @@ const restockPrompt = ai.definePrompt({
   prompt: `You are an AI assistant that provides restocking suggestions for a store manager.
 
   Analyze the following inventory data and provide a list of restocking suggestions, including the product name, suggested quantity to restock, and the reason for the suggestion.
-  Consider historical sales data, current inventory levels, and storage locations to optimize restocking.
+  Consider current inventory levels and storage locations to optimize restocking.
 
   Here is the inventory data:
   {{#each this}}
   - Product Name: {{{productName}}}, Quantity: {{{quantity}}}, Category: {{{itemCategory}}}, Storage Location: {{{storageLocation}}}
-  {{#if salesData}}
-    Sales Data:
-    {{#each salesData}}
-      - Date: {{{date}}}, Quantity Sold: {{{quantitySold}}}
-    {{/each}}
-  {{/if}}
   {{/each}}
 
   Provide the output in JSON format.

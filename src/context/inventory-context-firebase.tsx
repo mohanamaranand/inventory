@@ -558,7 +558,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                   itemStatus: saleStatus,
                   salesInvoiceNumber: saleData.salesInvoiceNumber,
                   salesDate: Timestamp.fromDate(saleData.date),
-                  salesData: [...(currentItem.salesData || []), { date: saleData.date.toISOString(), quantitySold: saleItem.quantity }],
               });
 
               const remainingQuantity = currentItem.quantity - saleItem.quantity;

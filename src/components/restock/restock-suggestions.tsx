@@ -27,9 +27,10 @@ export function RestockSuggestions() {
       setLoading(true);
       try {
         const inventoryForAI = inventory.map(item => ({
-            ...item,
-            salesData: item.salesData || [],
-            date: item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate().toISOString() : item.purchaseDate.toString(),
+            productName: item.productName,
+            quantity: item.quantity,
+            itemCategory: item.itemCategory,
+            storageLocation: item.storageLocation,
         }));
         
         const result = await intelligentRestockSuggestions(inventoryForAI);
