@@ -51,6 +51,10 @@
           "type": "number",
           "description": "The unit price of the item."
         },
+        "purchasePrice": {
+          "type": "number",
+          "description": "The purchase price of the item."
+        },
         "itemStatus": {
           "type": "string",
           "description": "The current status of the item (e.g., In Stock, Sold, Damaged)."
@@ -68,59 +72,87 @@
         "itemStdCode",
         "itemCategory",
         "productName",
-        "productDetails",
         "quantity",
         "storageLocation",
         "unitPrice",
+        "purchasePrice",
         "itemStatus"
       ]
+    },
+    "user": {
+      "title": "User",
+      "description": "Represents a user of the application.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique ID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "role": {
+          "type": "string",
+          "description": "The user's role.",
+          "enum": ["owner", "administrator", "employee"]
+        }
+      },
+      "required": ["uid", "email", "role"]
     }
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "password"
     ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}/inventory_items/{itemId}",
+        "path": "/inventory/{itemId}",
         "definition": {
-          "entityName": "InventoryItem",
           "schema": {
-            "$ref": "#/backend/entities/InventoryItem"
+            "$ref": "#/entities/InventoryItem"
           },
-          "description": "Stores inventory items owned by a specific user. The path enforces ownership of inventory items by user ID. Only the user with the matching {userId} can access the inventory items in this collection. Includes denormalized 'userId' for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The ID of the user who owns the inventory items."
-            },
-            {
-              "name": "itemId",
-              "description": "The ID of the inventory item."
-            }
-          ]
+          "description": "Stores all inventory items."
         }
       },
       {
-        "path": "/roles_admin/{userId}",
+        "path": "/vehicleModels/{modelId}",
         "definition": {
-          "entityName": "user",
-          "schema": {
-            "$ref": "#/backend/entities/user"
-          },
-          "description": "Collection to store administrator role assignments.  The existence of a document with a user's ID in this collection grants them administrator privileges.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The ID of the user who has admin role."
-            }
-          ]
+            "schema": { "$ref": "#/entities/VehicleModel" },
+            "description": "Stores vehicle model definitions."
+        }
+      },
+      {
+        "path": "/assembledVehicles/{vehicleId}",
+        "definition": {
+            "schema": { "$ref": "#/entities/AssembledVehicle" },
+            "description": "Stores assembled vehicle records."
+        }
+      },
+      {
+        "path": "/batteryModels/{modelId}",
+        "definition": {
+            "schema": { "$ref": "#/entities/BatteryModel" },
+            "description": "Stores battery model definitions."
+        }
+      },
+      {
+        "path": "/assembledBatteries/{batteryId}",
+        "definition": {
+            "schema": { "$ref": "#/entities/AssembledBattery" },
+            "description": "Stores assembled battery records."
+        }
+      },
+      {
+        "path": "/customers/{customerId}",
+        "definition": {
+            "schema": { "$ref": "#/entities/Customer" },
+            "description": "Stores customer information."
         }
       }
-    ],
-    "reasoning": "The Firestore structure is designed to manage inventory items with a focus on clear authorization and data integrity. It leverages path-based ownership for user-specific data and a dedicated collection for global role assignments, ensuring Authorization Independence (CRITICAL) and secure 'list' operations. The structure enforces invariants like ownership by storing the inventory items within a user-specific subcollection (`/users/{userId}/inventory_items/{itemId}`).\n\nSpecifically:\n\n1.  **Authorization Independence:** There is no need for `get()` calls in security rules because access to inventory items is implicitly granted to the owner (the user whose `userId` matches `request.auth.uid`).\n2.  **Clarity of Intent:** The path `/users/{userId}/inventory_items/{itemId}` clearly signifies that inventory items belong to a specific user.\n3.  **DBAC (No Custom Claims):** Roles are managed via the `/roles_admin/{uid}` collection.\n4.  **QAPs (Rules are not Filters):** Secure `list` operations are supported. Only the authenticated user can access their inventory items.\n5.  **Invariants:** The structure ensures the integrity of ownership, as only the authenticated user can create, read, update, or delete inventory items within their specific path."
+    ]
   }
 }

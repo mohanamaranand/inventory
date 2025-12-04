@@ -3,53 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ------------------------------------------------------------------------
-    // Helper Functions
-    // ------------------------------------------------------------------------
-
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-        // Check for 'owner' or 'administrator' role in custom claims
-        return isSignedIn() && (request.auth.token.role == 'owner' || request.auth.token.role == 'administrator');
-    }
-
-    // ------------------------------------------------------------------------
-    // Public Read, Authenticated Write Collections
-    // ------------------------------------------------------------------------
-    
-    match /inventory/{itemId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    
-    match /vehicleModels/{modelId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /assembledVehicles/{vehicleId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /batteryModels/{modelId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /assembledBatteries/{batteryId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /customers/{customerId} {
+    match /{document=**} {
       allow read: if true;
       allow write: if isSignedIn();
     }
