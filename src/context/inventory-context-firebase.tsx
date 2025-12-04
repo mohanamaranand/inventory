@@ -78,7 +78,7 @@ interface InventoryContextType extends AllData {
     id: string,
     newStatus: ItemStatus,
     splitQuantity: number,
-    splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }
+    splitItemData?: { productDetails?: string; salesInvoiceNumber?: string, salesDate?: Date }
   ) => Promise<void>;
   deleteItem: (id: string, restock?: boolean) => Promise<void>;
   deleteMultipleItems: (ids: string[], restock?: boolean) => Promise<void>;
@@ -236,7 +236,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [db]);
 
 
-  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }) => {
+  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string; salesDate?: Date }) => {
       await runTransaction(db, async (transaction) => {
         const itemDocRef = doc(db, 'inventory', id);
         const itemDoc = await transaction.get(itemDocRef);
@@ -256,6 +256,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
+            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : (newStatus.includes('Sold') ? serverTimestamp() : undefined)
         };
 
         const q = query(

@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ITEM_CATEGORIES,
   ITEM_STATUSES,
+  SOLD_STATUSES,
   type InventoryItem,
 } from "@/lib/types";
 import { useEffect } from "react";
@@ -66,6 +67,7 @@ const formSchema = z.object({
   purchasePrice: z.coerce.number().min(0, "Purchase price cannot be negative.").optional(),
   itemStatus: z.enum(ITEM_STATUSES).optional(),
   salesInvoiceNumber: z.string().optional(),
+  salesDate: z.date().optional(),
   splitQuantity: z.coerce.number().int().min(0).optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
 });
@@ -99,6 +101,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         unitPrice: 0,
         purchasePrice: 0,
         salesInvoiceNumber: "",
+        salesDate: undefined,
         splitQuantity: 0,
         imageUrl: "",
       },
@@ -106,6 +109,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   const watchStatus = form.watch("itemStatus");
   const showSplit = editingItem && watchStatus && watchStatus !== editingItem.itemStatus;
+  const isSoldStatus = watchStatus && SOLD_STATUSES.includes(watchStatus as any);
 
   useEffect(() => {
     if (editingItem) {
@@ -113,21 +117,34 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
       if (editingItem.purchaseDate) {
           if (editingItem.purchaseDate instanceof Timestamp) {
               purchaseDate = editingItem.purchaseDate.toDate();
+          } else if (editingItem.purchaseDate instanceof Date) {
+              purchaseDate = editingItem.purchaseDate;
           } else {
               const d = new Date(editingItem.purchaseDate);
-              if (!isNaN(d.getTime())) {
-                  purchaseDate = d;
-              } else {
-                  purchaseDate = new Date();
-              }
+              purchaseDate = !isNaN(d.getTime()) ? d : new Date();
           }
       } else {
           purchaseDate = new Date();
       }
 
+      let salesDate: Date | undefined;
+      if (editingItem.salesDate) {
+          if (editingItem.salesDate instanceof Timestamp) {
+              salesDate = editingItem.salesDate.toDate();
+          } else if (editingItem.salesDate instanceof Date) {
+              salesDate = editingItem.salesDate;
+          } else {
+              const d = new Date(editingItem.salesDate);
+              if (!isNaN(d.getTime())) {
+                  salesDate = d;
+              }
+          }
+      }
+
       form.reset({
         ...editingItem,
         purchaseDate,
+        salesDate,
         productDetails: editingItem.productDetails || "",
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         purchasePrice: editingItem.purchasePrice || 0,
@@ -147,6 +164,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         purchasePrice: 0,
         salesInvoiceNumber: "",
         itemStatus: 'In Stock',
+        salesDate: undefined,
         splitQuantity: 0,
         imageUrl: "",
       });
@@ -155,13 +173,15 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-        const submissionValues: Omit<InventoryItem, 'id' | 'salesDate'> = {
+        const submissionValues: Omit<InventoryItem, 'id'> = {
             ...values,
             imageUrl: values.imageUrl || '',
             productDetails: values.productDetails || '',
             salesInvoiceNumber: values.salesInvoiceNumber || '',
             purchasePrice: values.purchasePrice || 0,
             itemStatus: values.itemStatus || 'In Stock',
+            purchaseDate: values.purchaseDate,
+            salesDate: values.salesDate,
         };
 
         if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
@@ -175,20 +195,26 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 values.splitQuantity,
                 {
                     productDetails: submissionValues.productDetails,
-                    salesInvoiceNumber: submissionValues.salesInvoiceNumber
+                    salesInvoiceNumber: submissionValues.salesInvoiceNumber,
+                    salesDate: submissionValues.salesDate
                 }
             );
             toast({ title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
             const { splitQuantity, ...updateData } = submissionValues;
-            const updatedItemData = { ...updateData, purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate) };
+            const updatedItemData = { 
+              ...updateData, 
+              purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate),
+              salesDate: submissionValues.salesDate ? Timestamp.fromDate(submissionValues.salesDate) : undefined,
+            };
             await editAndMergeItem(itemId, updatedItemData as Omit<InventoryItem, 'id'>);
             toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated and combined with any matching items.` });
         } else {
             const { splitQuantity, ...addData } = submissionValues;
             await addItem({
                 ...addData,
-                purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate)
+                purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate),
+                salesDate: submissionValues.salesDate ? Timestamp.fromDate(submissionValues.salesDate) : undefined,
             } as Omit<InventoryItem, 'id'>);
             toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
         }
@@ -473,19 +499,64 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                         />
                       </div>
                     )}
-                    <FormField
-                      control={form.control}
-                      name="salesInvoiceNumber"
-                      render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Sales Invoice No.</FormLabel>
-                          <FormControl>
-                              <Input placeholder="e.g., SALE-2024-001" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                          </FormItem>
-                      )}
-                    />
+                    {isSoldStatus && (
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                            control={form.control}
+                            name="salesInvoiceNumber"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Sales Invoice No.</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g., SALE-2024-001" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                             <FormField
+                                control={form.control}
+                                name="salesDate"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                    <FormLabel>Sales Date</FormLabel>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <FormControl>
+                                            <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                            )}
+                                            >
+                                            {field.value ? (
+                                                format(field.value, "PPP")
+                                            ) : (
+                                                <span>Pick a sales date</span>
+                                            )}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            disabled={(date) =>
+                                            date > new Date() || date < new Date("1900-01-01")
+                                            }
+                                            initialFocus
+                                        />
+                                        </PopoverContent>
+                                    </Popover>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
             
