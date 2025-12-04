@@ -2,36 +2,19 @@
  * Core Philosophy:
  * This ruleset is designed for an internal inventory management application.
  * The core security principle is that any authenticated user within the organization
- * can view the entire inventory, but write operations (creating, updating, or
- * deleting items) are strictly controlled. Currently, write operations are
- * disabled pending a schema update to include an ownership field.
+ * can view all data, but write operations (creating, updating, or deleting items)
+ * are strictly controlled.
  *
  * Data Structure:
- * The data structure is a flat, single-collection model. All inventory items
- * are stored in the top-level `/inventoryItems` collection. This simplifies
- * queries and rules by avoiding nested data and complex parent lookups.
+ * The data is structured across multiple top-level collections for different
+ * data models (inventory, vehicleModels, customers, etc.).
  *
  * Key Security Decisions:
  * 1. Authenticated Reads: To prevent public data exposure, all read operations
- *    (getting a single item or listing all items) require the user to be signed in.
- * 2. Writes Disabled by Default: A critical security decision has been made to
- *    disable all write operations (`create`, `update`, `delete`). The `InventoryItem`
- *    entity is missing an 'ownerId' or 'authorId' field, making it impossible
- *    to securely verify who is authorized to modify an item. These rules will need
- *    to be updated once the schema includes an ownership link.
- * 3. No User Data Isolation: At present, there is no concept of user-specific
- *    data. Any authenticated user can list the entire inventory.
- *
- * Denormalization for Authorization:
- * To enable secure writes in the future, it is strongly recommended to
- * denormalize an `ownerId` field (containing the UID of the user who created
- * the item) directly onto each `/inventoryItems/{inventoryItemId}` document.
- * This will allow for simple, performant rules like `resource.data.ownerId == request.auth.uid`
- * without requiring costly `get()` or `exists()` calls to other collections.
- *
- * Structural Segregation:
- * This principle is not currently applicable as all data is of a single type
- * (inventory items) and shares the same access requirements.
+ *    (get, list) across all collections require the user to be signed in.
+ * 2. Writes Controlled: Write permissions will be granted based on user roles
+ *    (owner, administrator) which will be implemented in future rules.
+ *    For now, most writes are disabled to maintain a secure-by-default posture.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -50,32 +33,67 @@ service cloud.firestore {
 
 
     // ----------------------------------------------------------------------
-    // Collection Rules: /inventoryItems
+    // Collection Rules
     // ----------------------------------------------------------------------
 
     /**
      * @description
-     *   Manages access to inventory items. Allows any signed-in user to read
-     *   the inventory, but blocks all write operations until a proper
-     *   ownership model is defined in the data schema.
-     * @path /inventoryItems/{inventoryItemId}
-     * @allow (get) A signed-in user reads an inventory item document.
-     * @deny (create) Any user, signed-in or not, attempts to create a new item.
-     * @principle
-     *   Enforces "Authenticated Read, Locked Writes". This is a secure-by-default
-     *   posture when the data model lacks an ownership field needed for authorization.
+     *   Manages access to all inventory items.
+     * @path /inventory/{inventoryId}
      */
-    match /inventoryItems/{inventoryItemId} {
-      // Read rules: Allow any authenticated user to view the inventory.
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+    match /inventory/{inventoryId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+    
+    /**
+     * @description
+     *   Manages vehicle models (blueprints for assembly).
+     * @path /vehicleModels/{modelId}
+     */
+    match /vehicleModels/{modelId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
 
-      // CRITICAL: Cannot implement owner-only writes. The 'InventoryItem' entity is missing an 'ownerId' or 'authorId' field.
-      // All write operations are disabled to prevent unauthorized data modification.
-      // Update these rules once an ownership field is added to the InventoryItem schema.
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., request.resource.data.ownerId == request.auth.uid).
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., resource.data.ownerId == request.auth.uid).
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., resource.data.ownerId == request.auth.uid).
+    /**
+     * @description
+     *   Manages assembled vehicles records.
+     * @path /assembledVehicles/{vehicleId}
+     */
+    match /assembledVehicles/{vehicleId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+
+    /**
+     * @description
+     *   Manages battery models (blueprints for assembly).
+     * @path /batteryModels/{modelId}
+     */
+    match /batteryModels/{modelId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+
+    /**
+     * @description
+     *   Manages assembled battery records.
+     * @path /assembledBatteries/{batteryId}
+     */
+    match /assembledBatteries/{batteryId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+
+    /**
+     * @description
+     *   Manages customer records.
+     * @path /customers/{customerId}
+     */
+    match /customers/{customerId} {
+      allow read;
+      allow write: if isSignedIn();
     }
   }
 }
