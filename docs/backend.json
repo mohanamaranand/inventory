@@ -1,151 +1,106 @@
 {
   "entities": {
     "InventoryItem": {
-      "title": "Inventory Item",
-      "description": "Represents a single item in the inventory.",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "InventoryItem",
       "type": "object",
+      "description": "Represents an item in the inventory.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier" },
-        "purchaseInvoiceNumber": { "type": "string" },
-        "vendorName": { "type": "string" },
-        "date": { "type": "string", "format": "date-time" },
-        "itemStdCode": { "type": "string" },
-        "itemCategory": { "type": "string" },
-        "productName": { "type": "string" },
-        "productDetails": { "type": "string" },
-        "quantity": { "type": "number" },
-        "storageLocation": { "type": "string" },
-        "unitPrice": { "type": "number" },
-        "purchasePrice": { "type": "number" },
-        "itemStatus": { "type": "string" },
-        "salesInvoiceNumber": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "salesData": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "date": { "type": "string" },
-              "quantitySold": { "type": "number" }
-            }
-          }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the inventory item."
+        },
+        "purchaseInvoiceNumber": {
+          "type": "string",
+          "description": "The purchase invoice number associated with the item."
+        },
+        "vendorName": {
+          "type": "string",
+          "description": "The name of the vendor from whom the item was purchased."
+        },
+        "date": {
+          "type": "string",
+          "description": "The date the item was purchased.",
+          "format": "date-time"
+        },
+        "itemStdCode": {
+          "type": "string",
+          "description": "The standard code of the item."
+        },
+        "itemCategory": {
+          "type": "string",
+          "description": "The category of the item (e.g., Vehicle Part, Spare, Accessories)."
+        },
+        "productName": {
+          "type": "string",
+          "description": "The name of the product."
+        },
+        "productDetails": {
+          "type": "string",
+          "description": "Detailed description of the product."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of the item in stock."
+        },
+        "storageLocation": {
+          "type": "string",
+          "description": "The location where the item is stored."
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "The unit price of the item."
+        },
+        "itemStatus": {
+          "type": "string",
+          "description": "The current status of the item (e.g., In Stock, Sold, Damaged)."
+        },
+        "salesInvoiceNumber": {
+          "type": "string",
+          "description": "The sales invoice number associated with the item, if sold."
         }
       },
-      "required": ["id", "productName", "quantity", "unitPrice", "purchasePrice", "itemStdCode"]
-    },
-    "VehicleModel": {
-      "title": "Vehicle Model",
-      "description": "Defines a template for assembling a vehicle, including required parts.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "parts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "itemStdCode": { "type": "string" },
-              "quantity": { "type": "number" }
-            }
-          }
-        }
-      },
-       "required": ["id", "name", "parts"]
-    },
-    "AssembledVehicle": {
-        "title": "Assembled Vehicle",
-        "description": "Represents a vehicle that has been assembled.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "modelId": { "type": "string" },
-            "chassisNumber": { "type": "string" },
-            "motorNumber": { "type": "string" },
-            "assemblyDate": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "modelId", "chassisNumber", "motorNumber", "assemblyDate"]
-    },
-     "BatteryModel": {
-      "title": "Battery Model",
-      "description": "Defines a template for assembling a battery, including required parts.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "parts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "itemStdCode": { "type": "string" },
-              "quantity": { "type": "number" }
-            }
-          }
-        }
-      },
-       "required": ["id", "name", "parts"]
-    },
-    "AssembledBattery": {
-        "title": "Assembled Battery",
-        "description": "Represents a battery that has been assembled.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "modelId": { "type": "string" },
-            "serialNumber": { "type": "string" },
-            "assemblyDate": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "modelId", "serialNumber", "assemblyDate"]
-    },
-    "Customer": {
-        "title": "Customer",
-        "description": "Represents a customer or dealer.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "contactPerson": { "type": "string" },
-            "phone": { "type": "string" },
-            "email": { "type": "string", "format": "email" },
-            "address": { "type": "string" }
-        },
-        "required": ["id", "name", "contactPerson", "phone", "email", "address"]
+      "required": [
+        "id",
+        "purchaseInvoiceNumber",
+        "vendorName",
+        "date",
+        "itemStdCode",
+        "itemCategory",
+        "productName",
+        "productDetails",
+        "quantity",
+        "storageLocation",
+        "unitPrice",
+        "itemStatus"
+      ]
     }
   },
   "auth": {
-    "providers": ["google.com"],
-    "customClaims": {
-      "role": {
-        "type": "string",
-        "enum": ["owner", "administrator", "employee"]
-      }
-    }
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
-    "/inventory/{inventoryId}": {
-      "schema": { "$ref": "#/entities/InventoryItem" },
-      "description": "Collection of all inventory items."
-    },
-    "/vehicleModels/{modelId}": {
-        "schema": { "$ref": "#/entities/VehicleModel" },
-        "description": "Collection of all vehicle model definitions."
-    },
-    "/assembledVehicles/{vehicleId}": {
-        "schema": { "$ref": "#/entities/AssembledVehicle" },
-        "description": "Collection of all assembled vehicles."
-    },
-     "/batteryModels/{modelId}": {
-        "schema": { "$ref": "#/entities/BatteryModel" },
-        "description": "Collection of all battery model definitions."
-    },
-    "/assembledBatteries/{batteryId}": {
-        "schema": { "$ref": "#/entities/AssembledBattery" },
-        "description": "Collection of all assembled batteries."
-    },
-    "/customers/{customerId}": {
-        "schema": { "$ref": "#/entities/Customer" },
-        "description": "Collection of all customers."
-    }
+    "structure": [
+      {
+        "path": "/inventoryItems/{inventoryItemId}",
+        "definition": {
+          "entityName": "InventoryItem",
+          "schema": {
+            "$ref": "#/backend/entities/InventoryItem"
+          },
+          "description": "Stores all inventory items. The 'inventoryItemId' is the unique identifier for each item, automatically generated.",
+          "params": [
+            {
+              "name": "inventoryItemId",
+              "description": "The unique identifier for the inventory item."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to manage inventory items efficiently, ensuring security and scalability. We will store inventory items under a collection named 'inventoryItems'. Each document in this collection represents an inventory item and contains all the necessary details as defined in the 'InventoryItem' entity. This flat structure avoids nested subcollections and simplifies security rules and queries. The unique id of Inventory Item will be document id.\n\nAuthorization Independence is achieved because there is no need to check parents for authorization. Since all items are stored under one collection all rules can be applied to all items with same logic.\n\nThis design supports the required QAPs by storing all items in one collection, allowing for simple `list` operations, which will need filtering to show only items the user has the rights to see. This structure allows the application to scale without complex authorization checks slowing down read or write operations."
   }
 }

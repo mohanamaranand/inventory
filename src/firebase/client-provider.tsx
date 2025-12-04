@@ -1,19 +1,26 @@
 'use client';
 
-import { Suspense } from "react";
-import { FirebaseProvider } from './provider';
+import React, { useMemo, type ReactNode } from 'react';
+import { FirebaseProvider } from '@/firebase/provider';
+import { initializeFirebase } from '@/firebase';
 
-// This component is a wrapper that ensures the FirebaseProvider is only rendered on the client.
-// This is crucial to prevent hydration errors in Next.js, as Firebase initialization relies
-// on browser-specific APIs that aren't available on the server.
-export function FirebaseClientProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+interface FirebaseClientProviderProps {
+  children: ReactNode;
+}
+
+export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
+  const firebaseServices = useMemo(() => {
+    // Initialize Firebase on the client side, once per component mount.
+    return initializeFirebase();
+  }, []); // Empty dependency array ensures this runs only once on mount
+
   return (
-    <Suspense fallback={<div>Loading Firebase...</div>}>
-        <FirebaseProvider>{children}</FirebaseProvider>
-    </Suspense>
+    <FirebaseProvider
+      firebaseApp={firebaseServices.firebaseApp}
+      auth={firebaseServices.auth}
+      firestore={firebaseServices.firestore}
+    >
+      {children}
+    </FirebaseProvider>
   );
 }
