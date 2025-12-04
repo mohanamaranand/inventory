@@ -51,7 +51,7 @@ export function SalesPurchasesChart() {
 
     inventory.forEach(item => {
         if (!item.date) return;
-        const itemDate = item.date.toDate();
+        const itemDate = item.date; // No longer calling .toDate()
         const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
 
         if (monthDiff >= 0 && monthDiff < 12) {
