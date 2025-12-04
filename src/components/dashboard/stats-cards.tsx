@@ -7,9 +7,12 @@ import { formatCurrency } from "@/lib/utils";
 import { Boxes, DollarSign, Users, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import { SOLD_STATUSES } from "@/lib/types";
+import { useUser } from "@/firebase/auth/use-user";
 
 export function StatsCards() {
   const { inventory, customers } = useInventory();
+  const { user } = useUser();
+  const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
 
   const stats = useMemo(() => {
     const totalItems = inventory.reduce((sum, item) => {
@@ -28,6 +31,10 @@ export function StatsCards() {
       },
       0
     );
+
+    const totalPurchaseValue = inventory.reduce((sum, item) => {
+        return sum + (item.quantity * (item.purchasePrice || 0));
+    }, 0);
     
     const totalSales = inventory.reduce((sum, item) => {
         if (SOLD_STATUSES.includes(item.itemStatus)) {
@@ -38,10 +45,16 @@ export function StatsCards() {
 
     const totalCustomers = customers.length;
 
-    return { totalItems, totalValue, totalSales, totalCustomers };
+    return { totalItems, totalValue, totalSales, totalCustomers, totalPurchaseValue };
   }, [inventory, customers]);
 
   const statItems = [
+    ...(isPrivilegedUser ? [{
+      title: "Total Purchase Value",
+      value: formatCurrency(stats.totalPurchaseValue),
+      icon: DollarSign,
+      color: "text-red-500",
+    }] : []),
     {
       title: "Total Stock Value",
       value: formatCurrency(stats.totalValue),
@@ -66,7 +79,7 @@ export function StatsCards() {
       icon: Users,
       color: "text-purple-500",
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

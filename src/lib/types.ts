@@ -49,6 +49,7 @@ export interface InventoryItem {
   quantity: number;
   storageLocation: string;
   unitPrice: number;
+  purchasePrice: number;
   itemStatus: ItemStatus;
   salesInvoiceNumber?: string;
   salesData?: { date: string; quantitySold: number }[];
@@ -99,4 +100,14 @@ export interface Customer {
     phone: string;
     email: string;
     address: string;
+}
+
+export type UserRole = 'owner' | 'administrator' | 'employee' | null;
+
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  role: UserRole;
 }

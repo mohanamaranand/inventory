@@ -47,6 +47,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Timestamp } from "firebase/firestore";
+import { useUser } from "@/firebase/auth/use-user";
+
 
 const formSchema = z.object({
   purchaseInvoiceNumber: z.string().min(1, "Purchase invoice number is required."),
@@ -61,6 +63,7 @@ const formSchema = z.object({
   quantity: z.coerce.number().int().min(0, "Quantity cannot be negative."),
   storageLocation: z.string().min(1, "Storage location is required."),
   unitPrice: z.coerce.number().min(0, "Unit price cannot be negative."),
+  purchasePrice: z.coerce.number().min(0, "Purchase price cannot be negative."),
   itemStatus: z.enum(ITEM_STATUSES).optional(),
   salesInvoiceNumber: z.string().optional(),
   splitQuantity: z.coerce.number().int().min(0).optional(),
@@ -77,6 +80,8 @@ type InventoryFormProps = {
 export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: InventoryFormProps) {
   const { addItem, editAndMergeItem, getItem, splitItem } = useInventory();
   const { toast } = useToast();
+  const { user } = useUser();
+  const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
   
   const editingItem = itemId ? getItem(itemId) : null;
 
@@ -92,6 +97,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         quantity: 0,
         storageLocation: "",
         unitPrice: 0,
+        purchasePrice: 0,
         salesInvoiceNumber: "",
         splitQuantity: 0,
         imageUrl: "",
@@ -105,7 +111,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
-        date: editingItem.date,
+        date: editingItem.date instanceof Timestamp ? editingItem.date.toDate() : editingItem.date,
         productDetails: editingItem.productDetails || "",
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         splitQuantity: 0,
@@ -121,6 +127,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         quantity: 0,
         storageLocation: "",
         unitPrice: 0,
+        purchasePrice: 0,
         salesInvoiceNumber: "",
         itemStatus: 'In Stock',
         splitQuantity: 0,
@@ -222,7 +229,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 name="unitPrice"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Unit Price</FormLabel>
+                    <FormLabel>Unit Price (Sale)</FormLabel>
                     <FormControl>
                         <Input type="number" step="0.01" placeholder="0.00" {...field} />
                     </FormControl>
@@ -231,6 +238,21 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 )}
                 />
             </div>
+            {isPrivilegedUser && (
+                 <FormField
+                    control={form.control}
+                    name="purchasePrice"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Purchase Price</FormLabel>
+                        <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+            )}
              <FormField
                 control={form.control}
                 name="productDetails"

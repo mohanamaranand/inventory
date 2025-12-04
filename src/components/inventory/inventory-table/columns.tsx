@@ -42,13 +42,17 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Timestamp } from "firebase/firestore";
+import { useUser } from "@/firebase/auth/use-user";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
 };
 
-export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => [
+export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => {
+    const userHook = useUser();
+    const isPrivilegedUser = userHook.user?.role === 'owner' || userHook.user?.role === 'administrator';
+
+    return [
   {
     id: "select",
     header: ({ table }) => (
@@ -139,7 +143,6 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
               setSplitQuantity(1); // Default to 1
               setIsSplitDialogOpen(true);
             } else {
-              // If quantity is 1, just split the whole item
               splitItem(item.id, status, 1);
                toast({
                   title: "Item Status Updated",
@@ -238,6 +241,14 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
       return formatCurrency(quantity * unitPrice);
     },
   },
+  ...(isPrivilegedUser ? [{
+    id: "purchasePrice",
+    header: "Purchase Price",
+    cell: ({ row }: { row: any }) => {
+      const { quantity, purchasePrice } = row.original;
+      return formatCurrency(quantity * purchasePrice);
+    },
+  }] : []),
   {
     id: "actions",
     cell: function Cell({ row }) {
@@ -318,4 +329,5 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
       );
     },
   },
-];
+]
+};

@@ -16,6 +16,7 @@
         "quantity": { "type": "number" },
         "storageLocation": { "type": "string" },
         "unitPrice": { "type": "number" },
+        "purchasePrice": { "type": "number" },
         "itemStatus": { "type": "string" },
         "salesInvoiceNumber": { "type": "string" },
         "imageUrl": { "type": "string" },
@@ -30,7 +31,7 @@
           }
         }
       },
-      "required": ["id", "productName", "quantity", "unitPrice", "itemStdCode"]
+      "required": ["id", "productName", "quantity", "unitPrice", "purchasePrice", "itemStdCode"]
     },
     "VehicleModel": {
       "title": "Vehicle Model",
@@ -113,7 +114,13 @@
     }
   },
   "auth": {
-    "providers": ["anonymous"]
+    "providers": ["google.com"],
+    "customClaims": {
+      "role": {
+        "type": "string",
+        "enum": ["owner", "administrator", "employee"]
+      }
+    }
   },
   "firestore": {
     "/inventory/{inventoryId}": {
