@@ -48,8 +48,12 @@
           "description": "The location where the item is stored."
         },
         "unitPrice": {
-          "type": "number",
+          "type": "number",_
           "description": "The unit price of the item."
+        },
+        "purchasePrice": {
+          "type": "number",
+          "description": "The purchase price of the item. Only visible to owners and administrators."
         },
         "itemStatus": {
           "type": "string",
@@ -78,9 +82,18 @@
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
-    ]
+      "google.com"
+    ],
+    "customClaims": {
+      "role": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "administrator",
+          "employee"
+        ]
+      }
+    }
   },
   "firestore": {
     "structure": [
