@@ -21,10 +21,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && request.auth.uid == userId;
       // Users cannot update their own role
       allow update: if isSignedIn() && request.auth.uid == userId && request.resource.data.role == resource.data.role;
-      // Users cannot delete their own record
-      allow delete: if false;
+      // Allow users to delete their own record
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }
-
-    
