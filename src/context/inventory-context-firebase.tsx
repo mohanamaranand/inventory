@@ -558,6 +558,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                   itemStatus: saleStatus,
                   salesInvoiceNumber: saleData.salesInvoiceNumber,
                   salesDate: Timestamp.fromDate(saleData.date),
+                  customerId: saleData.customerId,
               });
 
               const remainingQuantity = currentItem.quantity - saleItem.quantity;
@@ -588,7 +589,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (data.inventory) {
         const inventoryWithDates = data.inventory.map(item => ({
             ...item,
-            purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate : Timestamp.fromDate(new Date(item.purchaseDate as any))
+            purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate : Timestamp.fromDate(new Date(item.purchaseDate as any)),
+            salesDate: item.salesDate ? (item.salesDate instanceof Timestamp ? item.salesDate : Timestamp.fromDate(new Date(item.salesDate as any))) : undefined,
         }))
         await addBatchItems(inventoryWithDates);
     }

@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, ArrowUpDown } from "lucide-react";
@@ -18,9 +19,10 @@ import { useToast } from "@/hooks/use-toast";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
+  onViewPurchases: (customer: Customer) => void;
 };
 
-export const columns = ({ onEdit }: ColumnsProps): ColumnDef<Customer>[] => [
+export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Customer>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -100,9 +102,13 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<Customer>[] => [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => onViewPurchases(customer)}>
+              View Purchases
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onEdit(customer.id)}>
               Edit
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleDelete}
               className="text-destructive focus:bg-destructive/10 focus:text-destructive"

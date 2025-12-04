@@ -54,6 +54,7 @@ export interface InventoryItem {
   itemStatus: ItemStatus;
   salesInvoiceNumber?: string;
   salesDate?: Timestamp | Date;
+  customerId?: string;
   imageUrl?: string;
 }
 

@@ -68,6 +68,10 @@
             "type": "string",
             "description": "The date the item was sold.",
             "format": "date-time"
+        },
+        "customerId": {
+          "type": "string",
+          "description": "The ID of the customer who purchased the item, if sold."
         }
       },
       "required": [
