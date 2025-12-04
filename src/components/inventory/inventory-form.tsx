@@ -109,9 +109,25 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   useEffect(() => {
     if (editingItem) {
+      let purchaseDate: Date;
+      if (editingItem.purchaseDate) {
+          if (editingItem.purchaseDate instanceof Timestamp) {
+              purchaseDate = editingItem.purchaseDate.toDate();
+          } else {
+              const d = new Date(editingItem.purchaseDate);
+              if (!isNaN(d.getTime())) {
+                  purchaseDate = d;
+              } else {
+                  purchaseDate = new Date();
+              }
+          }
+      } else {
+          purchaseDate = new Date();
+      }
+
       form.reset({
         ...editingItem,
-        purchaseDate: editingItem.purchaseDate instanceof Timestamp ? editingItem.purchaseDate.toDate() : new Date(editingItem.purchaseDate),
+        purchaseDate,
         productDetails: editingItem.productDetails || "",
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         purchasePrice: editingItem.purchasePrice || 0,
