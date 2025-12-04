@@ -2,8 +2,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/firebase";
+import { useAuth, useFirestore } from "@/firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
     const auth = useAuth();
+    const db = useFirestore();
     const { toast } = useToast();
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
@@ -26,6 +28,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+            // The redirect will be handled by the AppLayout component
         } catch (error: any) {
             console.error("Sign-in error:", error);
             toast({
@@ -42,11 +45,29 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            await createUserWithEmailAndPassword(auth, signUpEmail, signUpPassword);
+            const userCredential = await createUserWithEmailAndPassword(auth, signUpEmail, signUpPassword);
+            const user = userCredential.user;
+
+            // Assign role based on email
+            let role = 'employee';
+            if (signUpEmail.toLowerCase() === 'shreechakra.e.m@gmail.com') {
+                role = 'owner';
+            }
+
+            // Create user document in Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                uid: user.uid,
+                email: user.email,
+                role: role,
+            });
+
             toast({
                 title: 'Account Created',
                 description: "You have been successfully signed up. Please sign in.",
             });
+            // Clear sign-up form
+            setSignUpEmail('');
+            setSignUpPassword('');
         } catch (error: any) {
             console.error("Sign-up error:", error);
             toast({
@@ -113,3 +134,4 @@ export default function LoginPage() {
         </div>
     );
 }
+    

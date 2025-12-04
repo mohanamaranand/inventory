@@ -82,7 +82,7 @@ export function StatsCards() {
   ].filter(Boolean);
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
       {statItems.map((item) => (
         <Card key={item.title} className="shadow-md transition-all hover:shadow-lg hover:-translate-y-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -97,3 +97,5 @@ export function StatsCards() {
     </div>
   );
 }
+
+    

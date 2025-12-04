@@ -1,3 +1,4 @@
+
 import { Timestamp } from 'firebase/firestore';
 
 export const ITEM_CATEGORIES = [
@@ -41,7 +42,7 @@ export interface InventoryItem {
   id: string; // This will be the document ID from Firestore
   purchaseInvoiceNumber: string;
   vendorName: string;
-  date: Timestamp;
+  date: Timestamp | Date;
   itemStdCode: string;
   itemCategory: ItemCategory;
   productName: string;
@@ -72,7 +73,7 @@ export interface AssembledVehicle {
   modelId: string;
   chassisNumber: string;
   motorNumber: string;
-  assemblyDate: Timestamp;
+  assemblyDate: Timestamp | Date;
 }
 
 export interface BatteryPart {
@@ -90,7 +91,7 @@ export interface AssembledBattery {
     id: string;
     modelId: string;
     serialNumber: string;
-    assemblyDate: Timestamp;
+    assemblyDate: Timestamp | Date;
 }
 
 export interface Customer {
@@ -111,3 +112,5 @@ export interface User {
   photoURL: string | null;
   role: UserRole;
 }
+
+    

@@ -7,9 +7,24 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Default allow reads, but restrict writes
     match /{document=**} {
       allow read: if true;
       allow write: if isSignedIn();
     }
+
+    // Secure the users collection
+    match /users/{userId} {
+      // Any signed-in user can create their own user document
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Users can only read their own data
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      // Users cannot update their own role
+      allow update: if isSignedIn() && request.auth.uid == userId && request.resource.data.role == resource.data.role;
+      // Users cannot delete their own record
+      allow delete: if false;
+    }
   }
 }
+
+    

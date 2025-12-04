@@ -3,11 +3,9 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { User, UserRole } from '@/lib/types';
-import { useRouter, usePathname } from 'next/navigation';
-import { doc, getDoc, Firestore, getFirestore } from 'firebase/firestore';
-import { useFirebaseApp } from '../provider';
+import { doc } from 'firebase/firestore';
 
 interface UserContextType {
   user: User | null;
@@ -16,45 +14,40 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-async function getUserRole(db: Firestore, uid: string): Promise<UserRole> {
-    const adminRoleRef = doc(db, 'roles_admin', uid);
-    const adminDoc = await getDoc(adminRoleRef);
-    if (adminDoc.exists()) {
-        return 'administrator';
-    }
-    // You can add more role checks here if needed, e.g., for 'owner'
-    return 'employee';
-}
-
-
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const auth = useAuth();
-  const firebaseApp = useFirebaseApp();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const db = useFirestore();
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
-    const db = getFirestore(firebaseApp);
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        const role = await getUserRole(db, firebaseUser.uid);
-        
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName || firebaseUser.email,
-          photoURL: firebaseUser.photoURL,
-          role,
-        });
-
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setLoadingAuth(false);
     });
 
     return () => unsubscribe();
-  }, [auth, firebaseApp]);
+  }, [auth]);
+  
+  const userDocRef = useMemoFirebase(() => {
+    if (!firebaseUser) return null;
+    return doc(db, 'users', firebaseUser.uid);
+  }, [db, firebaseUser]);
+  
+  const { data: userProfile, isLoading: loadingProfile } = useDoc<User>(userDocRef);
+
+  const user = useMemo(() => {
+    if (!firebaseUser) return null;
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: firebaseUser.displayName || userProfile?.displayName || firebaseUser.email,
+      photoURL: firebaseUser.photoURL,
+      role: userProfile?.role || null,
+    };
+  }, [firebaseUser, userProfile]);
+
+  const loading = loadingAuth || loadingProfile;
 
   return (
     <UserContext.Provider value={{ user, loading }}>
@@ -70,3 +63,5 @@ export const useUser = () => {
   }
   return context;
 };
+
+    

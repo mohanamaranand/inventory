@@ -63,7 +63,7 @@ const formSchema = z.object({
   quantity: z.coerce.number().int().min(0, "Quantity cannot be negative."),
   storageLocation: z.string().min(1, "Storage location is required."),
   unitPrice: z.coerce.number().min(0, "Unit price cannot be negative."),
-  purchasePrice: z.coerce.number().min(0, "Purchase price cannot be negative."),
+  purchasePrice: z.coerce.number().min(0, "Purchase price cannot be negative.").optional(),
   itemStatus: z.enum(ITEM_STATUSES).optional(),
   salesInvoiceNumber: z.string().optional(),
   splitQuantity: z.coerce.number().int().min(0).optional(),
@@ -111,9 +111,10 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
-        date: editingItem.date instanceof Timestamp ? editingItem.date.toDate() : editingItem.date,
+        date: editingItem.date instanceof Timestamp ? editingItem.date.toDate() : new Date(editingItem.date),
         productDetails: editingItem.productDetails || "",
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
+        purchasePrice: editingItem.purchasePrice || 0,
         splitQuantity: 0,
       });
     } else {
@@ -142,7 +143,8 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             ...values,
             imageUrl: values.imageUrl || '',
             productDetails: values.productDetails || '',
-            salesInvoiceNumber: values.salesInvoiceNumber || ''
+            salesInvoiceNumber: values.salesInvoiceNumber || '',
+            purchasePrice: values.purchasePrice || 0,
         };
 
         if (showSplit && submissionValues.splitQuantity && submissionValues.splitQuantity > 0) {
@@ -482,3 +484,4 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
+    

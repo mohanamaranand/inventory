@@ -96,10 +96,18 @@
         "role": {
           "type": "string",
           "description": "The user's role.",
-          "enum": ["owner", "administrator", "employee"]
+          "enum": [
+            "owner",
+            "administrator",
+            "employee"
+          ]
         }
       },
-      "required": ["uid", "email", "role"]
+      "required": [
+        "uid",
+        "email",
+        "role"
+      ]
     }
   },
   "auth": {
@@ -121,38 +129,58 @@
       {
         "path": "/vehicleModels/{modelId}",
         "definition": {
-            "schema": { "$ref": "#/entities/VehicleModel" },
-            "description": "Stores vehicle model definitions."
+          "schema": {
+            "$ref": "#/entities/VehicleModel"
+          },
+          "description": "Stores vehicle model definitions."
         }
       },
       {
         "path": "/assembledVehicles/{vehicleId}",
         "definition": {
-            "schema": { "$ref": "#/entities/AssembledVehicle" },
-            "description": "Stores assembled vehicle records."
+          "schema": {
+            "$ref": "#/entities/AssembledVehicle"
+          },
+          "description": "Stores assembled vehicle records."
         }
       },
       {
         "path": "/batteryModels/{modelId}",
         "definition": {
-            "schema": { "$ref": "#/entities/BatteryModel" },
-            "description": "Stores battery model definitions."
+          "schema": {
+            "$ref": "#/entities/BatteryModel"
+          },
+          "description": "Stores battery model definitions."
         }
       },
       {
         "path": "/assembledBatteries/{batteryId}",
         "definition": {
-            "schema": { "$ref": "#/entities/AssembledBattery" },
-            "description": "Stores assembled battery records."
+          "schema": {
+            "$ref": "#/entities/AssembledBattery"
+          },
+          "description": "Stores assembled battery records."
         }
       },
       {
         "path": "/customers/{customerId}",
         "definition": {
-            "schema": { "$ref": "#/entities/Customer" },
-            "description": "Stores customer information."
+          "schema": {
+            "$ref": "#/entities/Customer"
+          },
+          "description": "Stores customer information."
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/user"
+          },
+          "description": "Stores user profile data and roles."
         }
       }
     ]
   }
 }
+    
