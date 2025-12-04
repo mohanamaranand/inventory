@@ -14,7 +14,7 @@ import type { Customer, InventoryItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 
 export function CustomerClient() {
-  const { customers, addBatchCustomers, addCustomer, updateCustomer } = useInventory();
+  const { customers, addBatchCustomers, addCustomer, updateCustomer, inventory } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [purchaseHistoryCustomer, setPurchaseHistoryCustomer] = useState<Customer | null>(null);
