@@ -51,7 +51,7 @@ export function InventoryPageContent() {
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const json: any[] = XLSX.utils.sheet_to_json(worksheet);
+        const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         const newItems: Omit<InventoryItem, 'id' | 'itemStatus'>[] = [];
         const itemsToUpdate: {id: string, data: Partial<InventoryItem>}[] = [];
