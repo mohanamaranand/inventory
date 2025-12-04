@@ -49,9 +49,9 @@ export function DataManagement() {
   const handleDownload = () => {
     const toDateString = (date: any) => {
         if (!date) return '';
-        if (date instanceof Timestamp) return date.toDate().toISOString().split('T')[0];
-        if (date instanceof Date) return date.toISOString().split('T')[0];
-        return String(date);
+        const d = date instanceof Timestamp ? date.toDate() : new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
     }
     
     const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({

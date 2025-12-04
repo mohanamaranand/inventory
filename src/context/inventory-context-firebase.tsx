@@ -146,11 +146,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { data: assembledBatteriesData, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
   const { data: customersData, loading: loadingCustomers } = useCollection<Customer>(customersQuery);
 
-  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, purchaseDate: item.purchaseDate, salesDate: item.salesDate })), [inventoryData]);
+  const inventory = useMemo(() => inventoryData || [], [inventoryData]);
   const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
-  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate })), [assembledVehiclesData]);
+  const assembledVehicles = useMemo(() => assembledVehiclesData || [], [assembledVehiclesData]);
   const batteryModels = useMemo(() => batteryModelsData || [], [batteryModelsData]);
-  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate })), [assembledBatteriesData]);
+  const assembledBatteries = useMemo(() => assembledBatteriesData || [], [assembledBatteriesData]);
   const customers = useMemo(() => customersData || [], [customersData]);
 
 
