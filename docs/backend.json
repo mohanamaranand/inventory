@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "InventoryItem": {
@@ -18,7 +19,7 @@
           "type": "string",
           "description": "The name of the vendor from whom the item was purchased."
         },
-        "date": {
+        "purchaseDate": {
           "type": "string",
           "description": "The date the item was purchased.",
           "format": "date-time"
@@ -62,13 +63,18 @@
         "salesInvoiceNumber": {
           "type": "string",
           "description": "The sales invoice number associated with the item, if any."
+        },
+        "salesDate": {
+            "type": "string",
+            "description": "The date the item was sold.",
+            "format": "date-time"
         }
       },
       "required": [
         "id",
         "purchaseInvoiceNumber",
         "vendorName",
-        "date",
+        "purchaseDate",
         "itemStdCode",
         "itemCategory",
         "productName",
@@ -183,4 +189,3 @@
     ]
   }
 }
-    

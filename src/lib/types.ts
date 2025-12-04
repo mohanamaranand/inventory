@@ -42,7 +42,7 @@ export interface InventoryItem {
   id: string; // This will be the document ID from Firestore
   purchaseInvoiceNumber: string;
   vendorName: string;
-  date: Timestamp | Date;
+  purchaseDate: Timestamp | Date;
   itemStdCode: string;
   itemCategory: ItemCategory;
   productName: string;
@@ -53,6 +53,7 @@ export interface InventoryItem {
   purchasePrice: number;
   itemStatus: ItemStatus;
   salesInvoiceNumber?: string;
+  salesDate?: Timestamp | Date;
   salesData?: { date: string; quantitySold: number }[];
   imageUrl?: string;
 }
@@ -112,5 +113,3 @@ export interface User {
   photoURL: string | null;
   role: UserRole;
 }
-
-    

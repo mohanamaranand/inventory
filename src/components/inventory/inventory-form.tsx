@@ -53,7 +53,7 @@ import { useUser } from "@/firebase/auth/use-user";
 const formSchema = z.object({
   purchaseInvoiceNumber: z.string().min(1, "Purchase invoice number is required."),
   vendorName: z.string().min(1, "Vendor name is required."),
-  date: z.date({ required_error: "A date of purchase is required." }),
+  purchaseDate: z.date({ required_error: "A date of purchase is required." }),
   itemStdCode: z.string().min(1, "Item STD Code is required."),
   itemCategory: z.enum(ITEM_CATEGORIES, {
     required_error: "You need to select an item category.",
@@ -90,7 +90,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     defaultValues: {
         purchaseInvoiceNumber: "",
         vendorName: "",
-        date: undefined,
+        purchaseDate: undefined,
         itemStdCode: "",
         productName: "",
         productDetails: "",
@@ -111,7 +111,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     if (editingItem) {
       form.reset({
         ...editingItem,
-        date: editingItem.date instanceof Timestamp ? editingItem.date.toDate() : new Date(editingItem.date),
+        purchaseDate: editingItem.purchaseDate instanceof Timestamp ? editingItem.purchaseDate.toDate() : new Date(editingItem.purchaseDate),
         productDetails: editingItem.productDetails || "",
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         purchasePrice: editingItem.purchasePrice || 0,
@@ -121,7 +121,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
       form.reset({
         purchaseInvoiceNumber: "",
         vendorName: "",
-        date: new Date(),
+        purchaseDate: new Date(),
         itemStdCode: "",
         productName: "",
         productDetails: "",
@@ -139,40 +139,41 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-        const submissionValues = {
+        const submissionValues: Omit<InventoryItem, 'id' | 'salesDate'> = {
             ...values,
             imageUrl: values.imageUrl || '',
             productDetails: values.productDetails || '',
             salesInvoiceNumber: values.salesInvoiceNumber || '',
             purchasePrice: values.purchasePrice || 0,
+            itemStatus: values.itemStatus || 'In Stock',
         };
 
-        if (showSplit && submissionValues.splitQuantity && submissionValues.splitQuantity > 0) {
-            if (!editingItem || submissionValues.splitQuantity > editingItem.quantity) {
+        if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
+            if (!editingItem || values.splitQuantity > editingItem.quantity) {
               form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
               return;
             }
             await splitItem(
                 editingItem.id,
                 submissionValues.itemStatus!,
-                submissionValues.splitQuantity,
+                values.splitQuantity,
                 {
                     productDetails: submissionValues.productDetails,
                     salesInvoiceNumber: submissionValues.salesInvoiceNumber
                 }
             );
-            toast({ title: "Item Split", description: `${submissionValues.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
+            toast({ title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
             const { splitQuantity, ...updateData } = submissionValues;
-            const updatedItemData = { ...updateData, date: Timestamp.fromDate(submissionValues.date) };
-            await editAndMergeItem(itemId, updatedItemData);
+            const updatedItemData = { ...updateData, purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate) };
+            await editAndMergeItem(itemId, updatedItemData as Omit<InventoryItem, 'id'>);
             toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated and combined with any matching items.` });
         } else {
             const { splitQuantity, ...addData } = submissionValues;
             await addItem({
                 ...addData,
-                date: Timestamp.fromDate(submissionValues.date)
-            });
+                purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate)
+            } as Omit<InventoryItem, 'id'>);
             toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
         }
         onFormSubmit();
@@ -366,7 +367,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             
             <FormField
               control={form.control}
-              name="date"
+              name="purchaseDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Purchase Date</FormLabel>

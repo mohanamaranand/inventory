@@ -42,33 +42,32 @@ export function SalesPurchasesChart() {
 
   React.useEffect(() => {
     const today = new Date();
-    const data: ChartData = [];
-
-    for (let i = 11; i >= 0; i--) {
+    const data: ChartData = Array.from({ length: 12 }, (_, i) => {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const month = date.toLocaleString('default', { month: 'short' });
-      data.push({ month, sales: 0, purchases: 0 });
-    }
+      return { month: date.toLocaleString('default', { month: 'short' }), sales: 0, purchases: 0 };
+    }).reverse();
 
     inventory.forEach(item => {
-        if (!item.date) return;
-        
-        const itemDate = item.date instanceof Timestamp ? item.date.toDate() : new Date(item.date);
+        const itemDate = item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : new Date(item.purchaseDate);
         
         const monthDiff = (today.getFullYear() - itemDate.getFullYear()) * 12 + (today.getMonth() - itemDate.getMonth());
 
         if (monthDiff >= 0 && monthDiff < 12) {
             const monthIndex = 11 - monthDiff;
             if (data[monthIndex]) {
-                const saleValue = item.quantity * item.unitPrice;
                 const purchaseValue = item.quantity * (item.purchasePrice || 0);
-                
-                if (SOLD_STATUSES.includes(item.itemStatus)) {
-                  data[monthIndex].sales += saleValue;
-                } else if (item.purchasePrice && item.purchasePrice > 0) {
-                    // This logic assumes items coming in are 'purchases'.
-                    // More specific logic might be needed if items can be added without being a purchase.
-                    data[monthIndex].purchases += purchaseValue;
+                data[monthIndex].purchases += purchaseValue;
+            }
+        }
+        
+        if (SOLD_STATUSES.includes(item.itemStatus) && item.salesDate) {
+            const saleDate = item.salesDate instanceof Timestamp ? item.salesDate.toDate() : new Date(item.salesDate);
+            const saleMonthDiff = (today.getFullYear() - saleDate.getFullYear()) * 12 + (today.getMonth() - saleDate.getMonth());
+            if(saleMonthDiff >=0 && saleMonthDiff < 12) {
+                const monthIndex = 11 - saleMonthDiff;
+                if(data[monthIndex]) {
+                    const saleValue = item.quantity * item.unitPrice;
+                    data[monthIndex].sales += saleValue;
                 }
             }
         }

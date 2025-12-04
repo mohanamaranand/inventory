@@ -146,11 +146,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { data: assembledBatteriesData, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
   const { data: customersData, loading: loadingCustomers } = useCollection<Customer>(customersQuery);
 
-  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, date: item.date instanceof Timestamp ? item.date.toDate() : item.date })), [inventoryData]);
+  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, purchaseDate: item.purchaseDate, salesDate: item.salesDate })), [inventoryData]);
   const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
-  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledVehiclesData]);
+  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate })), [assembledVehiclesData]);
   const batteryModels = useMemo(() => batteryModelsData || [], [batteryModelsData]);
-  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledBatteriesData]);
+  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate })), [assembledBatteriesData]);
   const customers = useMemo(() => customersData || [], [customersData]);
 
 
@@ -371,7 +371,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           return sum + (item ? item.unitPrice * part.quantity : 0);
       }, 0);
 
-      const assembledItem: Omit<InventoryItem, 'id'> = {
+      const assembledItem: Omit<InventoryItem, 'id' | 'salesDate'> = {
           productName: model.name,
           productDetails: `Assembled vehicle with Chassis: ${vehicleData.chassisNumber}, Motor: ${vehicleData.motorNumber}`,
           itemStdCode: `ASM-V-${vehicleData.chassisNumber}`,
@@ -382,7 +382,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           purchaseInvoiceNumber: 'ASSEMBLY',
           vendorName: 'In-House',
           storageLocation: 'Finished Goods',
-          date: serverTimestamp() as Timestamp,
+          purchaseDate: serverTimestamp() as Timestamp,
           imageUrl: '',
           purchasePrice: 0,
       };
@@ -470,7 +470,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return sum + (item ? item.unitPrice * part.quantity : 0);
       }, 0);
 
-      const assembledItem: Omit<InventoryItem, 'id'> = {
+      const assembledItem: Omit<InventoryItem, 'id' | 'salesDate'> = {
         productName: model.name,
         productDetails: `Assembled battery with Serial: ${batteryData.serialNumber}`,
         itemStdCode: `ASM-B-${batteryData.serialNumber}`,
@@ -481,7 +481,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         purchaseInvoiceNumber: 'ASSEMBLY',
         vendorName: 'In-House',
         storageLocation: 'Finished Goods',
-        date: serverTimestamp() as Timestamp,
+        purchaseDate: serverTimestamp() as Timestamp,
         imageUrl: '',
         purchasePrice: 0,
     };
@@ -556,7 +556,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                   unitPrice: saleItem.unitPrice,
                   itemStatus: saleStatus,
                   salesInvoiceNumber: saleData.salesInvoiceNumber,
-                  date: Timestamp.fromDate(saleData.date),
+                  salesDate: Timestamp.fromDate(saleData.date),
                   salesData: [...(currentItem.salesData || []), { date: saleData.date.toISOString(), quantitySold: saleItem.quantity }],
               });
 
@@ -588,7 +588,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (data.inventory) {
         const inventoryWithDates = data.inventory.map(item => ({
             ...item,
-            date: item.date instanceof Timestamp ? item.date : Timestamp.fromDate(new Date(item.date as any))
+            purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate : Timestamp.fromDate(new Date(item.purchaseDate as any))
         }))
         await addBatchItems(inventoryWithDates);
     }

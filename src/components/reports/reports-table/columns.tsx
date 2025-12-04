@@ -9,11 +9,12 @@ import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
+import { Timestamp } from "firebase/firestore";
 
 
 export const columns: ColumnDef<InventoryItem>[] = [
   {
-    accessorKey: "date",
+    accessorKey: "purchaseDate",
     header: ({ column }) => {
       return (
         <Button
@@ -26,8 +27,10 @@ export const columns: ColumnDef<InventoryItem>[] = [
       );
     },
     cell: ({ row }) => {
-        const date = row.getValue("date") as Date;
-        return <span>{format(date, "PPP")}</span>;
+        const date = row.getValue("purchaseDate") as Date | Timestamp;
+        if (!date) return null;
+        const jsDate = date instanceof Timestamp ? date.toDate() : date;
+        return <span>{format(jsDate, "PPP")}</span>;
     }
   },
   {
