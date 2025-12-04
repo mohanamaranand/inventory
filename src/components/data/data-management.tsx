@@ -56,7 +56,8 @@ export function DataManagement() {
     
     const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
         ...item,
-        date: toDateString(item.date),
+        purchaseDate: toDateString(item.purchaseDate),
+        salesDate: toDateString(item.salesDate),
     })));
     const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels.map(vm => ({ ...vm, parts: JSON.stringify(vm.parts) })));
     const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({
