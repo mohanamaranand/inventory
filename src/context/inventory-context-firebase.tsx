@@ -22,6 +22,7 @@ import {
   query,
   where,
   limit,
+  setDoc,
 } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useAuth, useFirestore, useMemoFirebase } from '@/firebase';
@@ -110,7 +111,7 @@ interface InventoryContextType extends AllData {
   ) => Promise<void>;
   deleteAssembledBattery: (id: string, restock?: boolean) => Promise<void>;
 
-  addCustomer: (customer: Omit<Customer, 'id'>) => Promise<void>;
+  addCustomer: (customer: Omit<Customer, 'id'>, id?: string) => Promise<void>;
   addBatchCustomers: (customers: Omit<Customer, 'id'>[]) => Promise<void>;
   updateCustomer: (
     id: string,
@@ -522,9 +523,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
   };
   
-  const addCustomer = async (customer: Omit<Customer, 'id'>) => {
-      await addDoc(getCollectionRef('customers'), customer);
+  const addCustomer = async (customer: Omit<Customer, 'id'>, id?: string) => {
+    if (id) {
+        await setDoc(doc(db, 'customers', id), customer);
+    } else {
+        await addDoc(getCollectionRef('customers'), customer);
+    }
   };
+
   const addBatchCustomers = async (customers: Omit<Customer, 'id'>[]) => {
     const batch = writeBatch(db);
     customers.forEach(customer => {

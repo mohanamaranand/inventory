@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, ArrowUpDown } from "lucide-react";
+import { MoreHorizontal, ArrowUpDown, Copy } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Customer } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context-firebase";
@@ -41,6 +41,28 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
     ),
     enableSorting: false,
     enableHiding: false,
+  },
+  {
+    accessorKey: "id",
+    header: "Customer ID",
+    cell: function Cell({ row }) {
+      const id = row.original.id;
+      const { toast } = useToast();
+      
+      const copyToClipboard = () => {
+        navigator.clipboard.writeText(id);
+        toast({ title: "Customer ID Copied!" });
+      };
+
+      return (
+        <div className="flex items-center gap-2">
+            <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
+                <Copy className="h-3 w-3" />
+            </Button>
+        </div>
+      );
+    }
   },
   {
     accessorKey: "name",

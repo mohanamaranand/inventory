@@ -14,7 +14,7 @@ import type { Customer, InventoryItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 
 export function CustomerClient() {
-  const { customers, inventory, addBatchCustomers } = useInventory();
+  const { customers, addBatchCustomers, addCustomer, updateCustomer } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [purchaseHistoryCustomer, setPurchaseHistoryCustomer] = useState<Customer | null>(null);
@@ -46,7 +46,7 @@ export function CustomerClient() {
   }, [inventory, purchaseHistoryCustomer]);
 
   const handleExport = () => {
-    const worksheet = XLSX.utils.json_to_sheet(customers.map(({id, ...rest}) => rest));
+    const worksheet = XLSX.utils.json_to_sheet(customers);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Customers");
     XLSX.writeFile(workbook, "customers.xlsx");
@@ -60,7 +60,7 @@ export function CustomerClient() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -73,30 +73,63 @@ export function CustomerClient() {
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-        const newCustomers = json.filter(row => {
+        const customersToCreate: Omit<Customer, 'id'>[] = [];
+        const customersToUpdate: Customer[] = [];
+
+        json.forEach(row => {
           const name = row['name'] || row['Name'];
-          // Simple validation and check for existence
-          return name && !customers.some(c => c.name.toLowerCase() === name.toLowerCase());
-        }).map(row => ({
-          name: row['name'] || row['Name'],
-          contactPerson: row['contactPerson'] || row['Contact Person'],
-          phone: String(row['phone'] || row['Phone']),
-          email: row['email'] || row['Email'],
-          address: row['address'] || row['Address'],
-        }));
-        
-        if (newCustomers.length > 0) {
-          await addBatchCustomers(newCustomers);
-           toast({
-            title: "Import Successful",
-            description: `${newCustomers.length} new customers have been added.`,
-          });
-        } else {
-           toast({
-            title: "No New Customers",
-            description: "The imported file does not contain any new customers.",
-          });
+          const id = row['id'] || row['customerId'];
+          
+          if (!name) return; // Skip rows without a name
+
+          const customerData = {
+            id: id, // Keep id for update check
+            name: name,
+            contactPerson: row['contactPerson'] || row['Contact Person'] || '',
+            phone: String(row['phone'] || row['Phone'] || ''),
+            email: row['email'] || row['Email'] || '',
+            address: row['address'] || row['Address'] || '',
+          };
+
+          const existingCustomer = customers.find(c => c.id === id);
+          if (existingCustomer) {
+            customersToUpdate.push(customerData);
+          } else {
+             // If ID is specified but not found, it's a new customer with a forced ID (restore case)
+             // If ID is not specified, it's a completely new customer
+             if(id) {
+                customersToUpdate.push(customerData); // treat as update/set
+             } else {
+                const { id, ...createData } = customerData;
+                customersToCreate.push(createData);
+             }
+          }
+        });
+
+        if (customersToCreate.length > 0) {
+          await addBatchCustomers(customersToCreate);
         }
+        if (customersToUpdate.length > 0) {
+          for (const cust of customersToUpdate) {
+            const { id, ...data } = cust;
+            if (customers.some(c => c.id === id)) {
+                await updateCustomer(id, data);
+            } else {
+                // This case handles restoring a customer with a specific ID that doesn't exist yet
+                await addCustomer(data, id);
+            }
+          }
+        }
+        
+        let description = '';
+        if (customersToCreate.length > 0) description += `${customersToCreate.length} new customers added. `;
+        if (customersToUpdate.length > 0) description += `${customersToUpdate.length} customers updated.`;
+        if (!description) description = "No new customers or updates found in the file.";
+
+        toast({
+          title: "Import Complete",
+          description: description,
+        });
 
       } catch (error) {
          toast({
