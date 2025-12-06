@@ -55,10 +55,11 @@ export function PurchaseHistoryDrawer({
                 {purchases.length > 0 ? (
                   purchases.map((item) => {
                     const date = item.salesDate;
-                    const jsDate = date instanceof Timestamp ? date.toDate() : date;
+                    const jsDate = date instanceof Timestamp ? date.toDate() : (date instanceof Date ? date : null);
+                    const isValidDate = jsDate && !isNaN(jsDate.getTime());
                     return (
                         <TableRow key={item.id}>
-                            <TableCell>{jsDate ? format(jsDate, "PPP") : 'N/A'}</TableCell>
+                            <TableCell>{isValidDate ? format(jsDate, "PPP") : 'N/A'}</TableCell>
                             <TableCell className="font-medium">
                                 <div>{item.productName}</div>
                                 <div className="text-xs text-muted-foreground">{item.itemStdCode}</div>
