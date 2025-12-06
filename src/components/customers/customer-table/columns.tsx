@@ -22,6 +22,70 @@ type ColumnsProps = {
   onViewPurchases: (customer: Customer) => void;
 };
 
+// A dedicated component for the cell to safely use hooks
+function CustomerIdCell({ row }: { row: { original: Customer } }) {
+  const id = row.original.id;
+  const { toast } = useToast();
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(id);
+    toast({ title: "Customer ID Copied!" });
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
+      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
+        <Copy className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+// A dedicated component for the actions cell to safely use hooks
+function ActionsCell({ row, onEdit, onViewPurchases }: { row: { original: Customer }, onEdit: (id: string) => void, onViewPurchases: (customer: Customer) => void }) {
+  const { deleteCustomer } = useInventory();
+  const { toast } = useToast();
+  const customer = row.original;
+
+  const handleDelete = () => {
+    deleteCustomer(customer.id);
+    toast({
+      variant: "destructive",
+      title: "Customer Deleted",
+      description: `"${customer.name}" has been removed.`,
+    });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => onViewPurchases(customer)}>
+          View Purchases
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit(customer.id)}>
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleDelete}
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+
 export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Customer>[] => [
   {
     id: "select",
@@ -45,24 +109,7 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
   {
     accessorKey: "id",
     header: "Customer ID",
-    cell: function Cell({ row }) {
-      const id = row.original.id;
-      const { toast } = useToast();
-      
-      const copyToClipboard = () => {
-        navigator.clipboard.writeText(id);
-        toast({ title: "Customer ID Copied!" });
-      };
-
-      return (
-        <div className="flex items-center gap-2">
-            <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
-                <Copy className="h-3 w-3" />
-            </Button>
-        </div>
-      );
-    }
+    cell: CustomerIdCell,
   },
   {
     accessorKey: "name",
@@ -100,46 +147,6 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
   },
   {
     id: "actions",
-    cell: function Cell({ row }) {
-      const { deleteCustomer } = useInventory();
-      const { toast } = useToast();
-      const customer = row.original;
-
-      const handleDelete = () => {
-        deleteCustomer(customer.id);
-        toast({
-          variant: "destructive",
-          title: "Customer Deleted",
-          description: `"${customer.name}" has been removed.`,
-        });
-      };
-      
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => onViewPurchases(customer)}>
-              View Purchases
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(customer.id)}>
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleDelete}
-              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-            >
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
+    cell: ({ row }) => <ActionsCell row={row} onEdit={onEdit} onViewPurchases={onViewPurchases} />,
   },
 ];
