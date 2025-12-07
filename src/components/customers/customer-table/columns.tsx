@@ -16,6 +16,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { Customer } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
@@ -35,9 +37,18 @@ function CustomerIdCell({ row }: { row: { original: Customer } }) {
   return (
     <div className="flex items-center gap-2">
       <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
-      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
-        <Copy className="h-3 w-3" />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
+                    <Copy className="h-3 w-3" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>Copy Customer ID</p>
+            </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }
@@ -109,7 +120,7 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
   {
     accessorKey: "id",
     header: "Customer ID",
-    cell: CustomerIdCell,
+    cell: ({row}) => <CustomerIdCell row={row} />,
   },
   {
     accessorKey: "name",

@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Wrench, CheckCircle, AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const formSchema = z.object({
   modelId: z.string({ required_error: "Please select a battery model." }),
@@ -146,17 +147,26 @@ export function AssembleBattery() {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-3">
-                    {partsAvailability.map((part, index) => (
-                      <li key={index} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                           {part.sufficient ? <CheckCircle className="h-4 w-4 text-green-500" /> : <AlertTriangle className="h-4 w-4 text-destructive" />}
-                          <span>{part.productName} ({part.itemStdCode})</span>
-                        </div>
-                        <Badge variant={part.sufficient ? "secondary" : "destructive"}>
-                          Required: {part.quantity} / Available: {part.available}
-                        </Badge>
-                      </li>
-                    ))}
+                    <TooltipProvider>
+                      {partsAvailability.map((part, index) => (
+                        <li key={index} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <Tooltip>
+                              <TooltipTrigger>
+                                {part.sufficient ? <CheckCircle className="h-4 w-4 text-green-500" /> : <AlertTriangle className="h-4 w-4 text-destructive" />}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {part.sufficient ? 'Sufficient parts in stock' : 'Insufficient parts in stock'}
+                              </TooltipContent>
+                            </Tooltip>
+                            <span>{part.productName} ({part.itemStdCode})</span>
+                          </div>
+                          <Badge variant={part.sufficient ? "secondary" : "destructive"}>
+                            Required: {part.quantity} / Available: {part.available}
+                          </Badge>
+                        </li>
+                      ))}
+                    </TooltipProvider>
                   </ul>
                 </CardContent>
               </Card>

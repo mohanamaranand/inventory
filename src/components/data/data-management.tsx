@@ -29,6 +29,7 @@ import { Download, Upload, Trash2, AlertTriangle, UserX, History, DatabaseBackup
 import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel, Backup } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
 import { format } from "date-fns";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 export function DataManagement() {
   const {
@@ -216,6 +217,7 @@ export function DataManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <TooltipProvider>
             {backups.length > 0 ? (
                 <ul className="space-y-2">
                     {backups.map(backup => (
@@ -228,11 +230,25 @@ export function DataManagement() {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                 <Button variant="outline" size="sm" onClick={() => handleRestoreBackup(backup)}>Restore</Button>
-                                 <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="icon"><Trash className="h-4 w-4"/></Button>
-                                    </AlertDialogTrigger>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button variant="outline" size="sm" onClick={() => handleRestoreBackup(backup)}>Restore</Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Restore data to this point in time.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                                <AlertDialog>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="destructive" size="icon"><Trash className="h-4 w-4"/></Button>
+                                            </AlertDialogTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Delete this backup.</p>
+                                        </TooltipContent>
+                                    </Tooltip>
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
                                             <AlertDialogTitle>Delete this backup?</AlertDialogTitle>
@@ -245,7 +261,7 @@ export function DataManagement() {
                                             <AlertDialogAction onClick={() => handleDeleteBackup(backup.id)}>Yes, Delete</AlertDialogAction>
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
-                                 </AlertDialog>
+                                </AlertDialog>
                             </div>
                         </li>
                     ))}
@@ -257,6 +273,7 @@ export function DataManagement() {
                     <p className="text-xs text-muted-foreground">A backup will be created automatically before your first sync.</p>
                 </div>
             )}
+          </TooltipProvider>
         </CardContent>
       </Card>
 
@@ -269,18 +286,34 @@ export function DataManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-6">
-            <Button onClick={handleDownload} variant="outline" size="lg" className="h-24">
-                <div className="flex flex-col items-center gap-2">
-                    <Download className="h-8 w-8"/>
-                    <span>Download Full Backup</span>
-                </div>
-            </Button>
-            <Button onClick={() => document.getElementById('restore-input')?.click()} variant="outline" size="lg" className="h-24">
-                <div className="flex flex-col items-center gap-2">
-                    <Upload className="h-8 w-8"/>
-                    <span>Restore from Backup</span>
-                </div>
-            </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleDownload} variant="outline" size="lg" className="h-24">
+                    <div className="flex flex-col items-center gap-2">
+                        <Download className="h-8 w-8"/>
+                        <span>Download Full Backup</span>
+                    </div>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Download all application data to an Excel file.</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button onClick={() => document.getElementById('restore-input')?.click()} variant="outline" size="lg" className="h-24">
+                        <div className="flex flex-col items-center gap-2">
+                            <Upload className="h-8 w-8"/>
+                            <span>Restore from Backup</span>
+                        </div>
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Restore data from an Excel backup file.</p>
+                </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
             <input
                 id="restore-input"
                 type="file"
@@ -389,5 +422,3 @@ export function DataManagement() {
     </div>
   );
 }
-
-    

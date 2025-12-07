@@ -13,6 +13,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Wrench, CheckCircle, Battery, Car } from "lucide-react";
 import { Separator } from "../ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 export function ProductionSummary() {
   const { 
@@ -80,30 +81,46 @@ export function ProductionSummary() {
         {productionStats.length > 0 ? (
           <ScrollArea className="h-full pr-4">
             <div className="space-y-4">
-              {productionStats.map((stats, index) => (
-                <div key={index}>
-                  <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
-                    <div className="flex items-center gap-3">
-                        <stats.Icon className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                            <p className="font-medium">{stats.modelName}</p>
-                            <p className="text-xs text-muted-foreground">{stats.type}</p>
-                        </div>
+              <TooltipProvider>
+                {productionStats.map((stats, index) => (
+                  <div key={index}>
+                    <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
+                      <div className="flex items-center gap-3">
+                          <stats.Icon className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                              <p className="font-medium">{stats.modelName}</p>
+                              <p className="text-xs text-muted-foreground">{stats.type}</p>
+                          </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-2">
+                                  <Wrench className="h-4 w-4 text-blue-500" />
+                                  <span className="font-bold text-lg">{stats.buildableCount}</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Number of units you can build with current inventory.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <span className="font-bold text-lg">{stats.assembledCount}</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Number of units already assembled and in stock.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-2" title="Buildable">
-                            <Wrench className="h-4 w-4 text-blue-500" />
-                            <span className="font-bold text-lg">{stats.buildableCount}</span>
-                        </div>
-                         <div className="flex items-center gap-2" title="Assembled">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="font-bold text-lg">{stats.assembledCount}</span>
-                        </div>
-                    </div>
+                    {index < productionStats.length -1 && <Separator className="mt-4" />}
                   </div>
-                  {index < productionStats.length -1 && <Separator className="mt-4" />}
-                </div>
-              ))}
+                ))}
+              </TooltipProvider>
             </div>
           </ScrollArea>
         ) : (
