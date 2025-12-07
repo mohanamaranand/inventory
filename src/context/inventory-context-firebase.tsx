@@ -239,6 +239,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batteryModels: Array.from(cache.batteryModels.values()),
         assembledBatteries: Array.from(cache.assembledBatteries.values()),
         customers: Array.from(cache.customers.values()),
+        backups: Array.from(cache.backups.values()),
     };
     
     const backupRef = doc(db, "backups", backupId);
@@ -286,7 +287,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const batteryModels = useMemo(() => Array.from(cache.batteryModels.values()), [cache.batteryModels]);
   const assembledBatteries = useMemo(() => Array.from(cache.assembledBatteries.values()), [cache.assembledBatteries]);
   const customers = useMemo(() => Array.from(cache.customers.values()), [cache.customers]);
-  const backups = useMemo(() => Array.from(cache.backups.values()).sort((a,b) => b.createdAt.toMillis() - a.createdAt.toMillis()), [cache.backups]);
+  const backups = useMemo(() => Array.from(cache.backups.values()).sort((a,b) => {
+    if (!a.createdAt) return -1;
+    if (!b.createdAt) return 1;
+    return b.createdAt.toMillis() - a.createdAt.toMillis()
+  }), [cache.backups]);
 
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
@@ -771,7 +776,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const clearAllData = useCallback(async () => {
-    const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers', 'backups'];
+    const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
     const newChanges: PendingChange[] = [];
     
     setCache(prevCache => {
@@ -782,6 +787,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
         });
+
+        if (prevCache.backups) {
+            prevCache.backups.forEach((_, id) => {
+                newChanges.push({ type: 'delete', collection: 'backups', id });
+            })
+        }
 
         setPendingChanges(prev => [...prev, ...newChanges]);
 
@@ -806,6 +817,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
     const backupData = backupDoc.data()?.data as AllData;
+    if (!backupData) {
+        console.error("Backup data is empty or invalid");
+        return;
+    }
 
     await clearAllData();
 
@@ -945,6 +960,8 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
 
     
 
