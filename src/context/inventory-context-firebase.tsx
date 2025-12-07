@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, {
@@ -168,9 +167,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
     if (!db) return;
+    const batch = writeBatch(db);
   
     for (const item of items) {
-      await runTransaction(db, async (transaction) => {
         const q = query(
           getCollectionRef('inventory'),
           where('itemStdCode', '==', item.itemStdCode),
@@ -186,13 +185,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           const existingDoc = querySnapshot.docs[0];
           const existingData = existingDoc.data() as InventoryItem;
           const newQuantity = existingData.quantity + item.quantity;
-          transaction.update(existingDoc.ref, { quantity: newQuantity });
+          batch.update(existingDoc.ref, { quantity: newQuantity });
         } else {
           const docRef = doc(getCollectionRef('inventory'));
-          transaction.set(docRef, { ...item, itemStatus: 'In Stock' });
+          batch.set(docRef, { ...item, itemStatus: 'In Stock' });
         }
-      });
     }
+    await batch.commit();
   }, [db]);
   
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
@@ -211,6 +210,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
      await runTransaction(db, async (transaction) => {
         const originalDocRef = doc(db, 'inventory', id);
+        const originalDoc = await transaction.get(originalDocRef);
+        if(!originalDoc.exists()) return;
+        
         transaction.delete(originalDocRef);
 
         const q = query(
