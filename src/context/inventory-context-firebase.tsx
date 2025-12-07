@@ -290,9 +290,41 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [db]);
 
-  const deleteItem = async (id: string, restock: boolean = false) => {
-    await deleteDoc(doc(db, 'inventory', id));
-  };
+  const deleteItem = useCallback(async (id: string, restock: boolean = false) => {
+    const itemToDelete = inventory.find(it => it.id === id);
+    if (!itemToDelete) return;
+  
+    if (restock && SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
+      await runTransaction(db, async (transaction) => {
+        const itemDocRef = doc(db, 'inventory', id);
+        transaction.delete(itemDocRef);
+  
+        const originalItemQuery = query(
+          collection(db, 'inventory'),
+          where('itemStdCode', '==', itemToDelete.itemStdCode),
+          where('itemStatus', '==', 'In Stock'),
+          where('productDetails', '==', itemToDelete.productDetails || ''),
+          where('purchaseInvoiceNumber', '==', itemToDelete.purchaseInvoiceNumber),
+          limit(1)
+        );
+  
+        const querySnapshot = await getDocs(originalItemQuery);
+  
+        if (!querySnapshot.empty) {
+          const existingDoc = querySnapshot.docs[0];
+          const existingData = existingDoc.data() as InventoryItem;
+          const newQuantity = existingData.quantity + itemToDelete.quantity;
+          transaction.update(existingDoc.ref, { quantity: newQuantity });
+        } else {
+          const { id: originalId, itemStatus, salesDate, salesInvoiceNumber, customerId, ...restoredData } = itemToDelete;
+          const newDocRef = doc(collection(db, 'inventory'));
+          transaction.set(newDocRef, { ...restoredData, itemStatus: 'In Stock' });
+        }
+      });
+    } else {
+      await deleteDoc(doc(db, 'inventory', id));
+    }
+  }, [db, inventory]);
   
   const deleteMultipleItems = async (ids: string[], restock: boolean = false) => {
     const batch = writeBatch(db);

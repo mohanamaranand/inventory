@@ -236,7 +236,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
         header: "Date Sold",
         cell: ({ row }) => {
           const item = row.original;
-          if (!SOLD_STATUSES.includes(item.itemStatus) || !item.salesDate) {
+          if (!SOLD_STATUSES.includes(item.itemStatus as any) || !item.salesDate) {
             return <span className="text-muted-foreground">-</span>;
           }
           const date = item.salesDate;
@@ -285,7 +285,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
             });
           };
           
-          if (item.itemCategory === "Assembled Vehicle" || item.itemCategory === "Assembled Battery") {
+          if (SOLD_STATUSES.includes(item.itemStatus as any)) {
             return (
               <AlertDialog>
                 <DropdownMenu>
@@ -310,9 +310,9 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
                 </DropdownMenu>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Assembled Item?</AlertDialogTitle>
+                    <AlertDialogTitle>Delete Sold Item?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Do you want to restock the parts from this item back into inventory, or just delete the record?
+                      Do you want to restock the parts from this item back into inventory (useful for returns), or just delete the sale record?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
