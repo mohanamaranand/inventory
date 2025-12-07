@@ -15,13 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { Progress } from "@/components/ui/progress";
-
-type PendingChange = {
-    type: 'create' | 'update' | 'delete';
-    collection: string;
-    id: string;
-    payload?: any;
-}
+import type { PendingChange } from "@/context/inventory-context-firebase";
 
 interface SyncDialogProps {
   isOpen: boolean;
@@ -35,16 +29,19 @@ const AUTO_SYNC_TIMEOUT = 60 * 1000; // 1 minute
 
 function getChangeDescription(change: PendingChange): string {
     const { type, collection, payload } = change;
-    const collectionName = collection.replace(/([A-Z])/g, ' $1').toLowerCase();
+    const collectionName = collection.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+
+    const name = payload?.name || payload?.productName || `ID ${change.id.substring(0,6)}...`;
 
     switch (type) {
         case 'create':
-            return `Create new ${collectionName}: ${payload?.name || payload?.productName || `ID ${change.id.substring(0,6)}...`}`;
+            return `Create new ${collectionName}: "${name}"`;
         case 'update':
             const fields = Object.keys(payload).join(', ');
-            return `Update ${collectionName} (ID: ${change.id.substring(0,6)}...): changed ${fields}`;
+            return `Update ${collectionName} "${name}": changed ${fields}`;
         case 'delete':
-            return `Delete ${collectionName} (ID: ${change.id.substring(0,6)}...)`;
+            // For deletes, we can't get the name from the payload, but the context should have it
+            return `Delete ${collectionName}: "${payload.name || `ID ${change.id}`}"`;
         default:
             return "Unknown change";
     }
@@ -77,7 +74,7 @@ export function SyncDialog({ isOpen, onOpenChange, onConfirm, pendingChanges, is
         <AlertDialogHeader>
           <AlertDialogTitle>Pending Changes</AlertDialogTitle>
           <AlertDialogDescription>
-            You have {pendingChanges.length} unsynced changes. Review them below and click "Sync Now" to save them to the cloud.
+            You have {pendingChanges.length} unsynced changes. Review them below and click "Sync Now" to save them to the cloud. A backup will be created automatically.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ScrollArea className="h-64 border rounded-md p-4">
@@ -94,7 +91,7 @@ export function SyncDialog({ isOpen, onOpenChange, onConfirm, pendingChanges, is
         </ScrollArea>
         {isAutoSync && (
              <div className="space-y-2 pt-4">
-                <p className="text-sm text-center text-muted-foreground">Auto-syncing in a moment...</p>
+                <p className="text-sm text-center text-muted-foreground">Auto-syncing in {Math.ceil(progress / (100 / (AUTO_SYNC_TIMEOUT / 1000)))}s...</p>
                 <Progress value={progress} />
              </div>
         )}
@@ -108,3 +105,5 @@ export function SyncDialog({ isOpen, onOpenChange, onConfirm, pendingChanges, is
     </AlertDialog>
   );
 }
+
+    

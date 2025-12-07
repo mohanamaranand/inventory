@@ -12,12 +12,28 @@ import { columns } from "./customer-table/columns";
 import { PurchaseHistoryDrawer } from "./purchase-history-drawer";
 import type { Customer, InventoryItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "../ui/checkbox";
+import { Label } from "../ui/label";
+
 
 export function CustomerClient() {
-  const { customers, addBatchCustomers, addCustomer, updateCustomer, inventory } = useInventory();
+  const { customers, addBatchCustomers, addCustomer, updateCustomer, inventory, clearAllCustomers } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [purchaseHistoryCustomer, setPurchaseHistoryCustomer] = useState<Customer | null>(null);
+  const [isImportAlertOpen, setIsImportAlertOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [deleteBeforeImport, setDeleteBeforeImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -60,9 +76,22 @@ export function CustomerClient() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setImportFile(file);
+      setDeleteBeforeImport(false);
+      setIsImportAlertOpen(true);
+    }
+     if(fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confirmImport = async () => {
+    if (!importFile) return;
+
+    if (deleteBeforeImport) {
+        await clearAllCustomers();
+    }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -80,10 +109,10 @@ export function CustomerClient() {
           const name = row['name'] || row['Name'];
           const id = row['id'] || row['customerId'];
           
-          if (!name) return; // Skip rows without a name
+          if (!name) return;
 
           const customerData = {
-            id: id, // Keep id for update check
+            id: id,
             name: name,
             contactPerson: row['contactPerson'] || row['Contact Person'] || '',
             phone: String(row['phone'] || row['Phone'] || ''),
@@ -95,10 +124,8 @@ export function CustomerClient() {
           if (existingCustomer) {
             customersToUpdate.push(customerData);
           } else {
-             // If ID is specified but not found, it's a new customer with a forced ID (restore case)
-             // If ID is not specified, it's a completely new customer
              if(id) {
-                customersToUpdate.push(customerData); // treat as update/set
+                customersToUpdate.push(customerData); 
              } else {
                 const { id, ...createData } = customerData;
                 customersToCreate.push(createData);
@@ -112,18 +139,13 @@ export function CustomerClient() {
         if (customersToUpdate.length > 0) {
           for (const cust of customersToUpdate) {
             const { id, ...data } = cust;
-            if (customers.some(c => c.id === id)) {
-                await updateCustomer(id, data);
-            } else {
-                // This case handles restoring a customer with a specific ID that doesn't exist yet
-                await addCustomer(data, id);
-            }
+            await addCustomer(data, id);
           }
         }
         
         let description = '';
         if (customersToCreate.length > 0) description += `${customersToCreate.length} new customers added. `;
-        if (customersToUpdate.length > 0) description += `${customersToUpdate.length} customers updated.`;
+        if (customersToUpdate.length > 0) description += `${customersToUpdate.length} customers updated/restored.`;
         if (!description) description = "No new customers or updates found in the file.";
 
         toast({
@@ -138,12 +160,11 @@ export function CustomerClient() {
           description: "There was an error processing the Excel file.",
         });
       } finally {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+        setImportFile(null);
+        setIsImportAlertOpen(false);
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsArrayBuffer(importFile);
   };
 
 
@@ -188,6 +209,26 @@ export function CustomerClient() {
           if (!isOpen) setPurchaseHistoryCustomer(null);
         }}
       />
+      <AlertDialog open={isImportAlertOpen} onOpenChange={setIsImportAlertOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Import Customers</AlertDialogTitle>
+                <AlertDialogDescription>
+                    You are about to import customers from <span className='font-bold'>{importFile?.name}</span>. This will add new customers and update existing ones based on their ID.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+             <div className="flex items-center space-x-2">
+                <Checkbox id="delete-before-import" checked={deleteBeforeImport} onCheckedChange={(checked) => setDeleteBeforeImport(!!checked)} />
+                <Label htmlFor="delete-before-import" className='text-destructive font-bold'>Delete all existing customers before importing</Label>
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setImportFile(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmImport}>Confirm Import</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
+
+    

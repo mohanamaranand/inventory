@@ -13,11 +13,27 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
 import { Timestamp } from 'firebase/firestore';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+  } from "@/components/ui/alert-dialog";
+import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label';
 
 export function InventoryPageContent() {
-  const { inventory, addBatchItems, getItemByStdCode, updateItem, loading } = useInventory();
+  const { inventory, addBatchItems, getItemByStdCode, updateItem, loading, clearAllData } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [isImportAlertOpen, setIsImportAlertOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [deleteBeforeImport, setDeleteBeforeImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -42,11 +58,25 @@ export function InventoryPageContent() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setImportFile(file);
+      setDeleteBeforeImport(false);
+      setIsImportAlertOpen(true);
+    }
+    // Reset file input value to allow re-uploading the same file
+    if(fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confirmImport = () => {
+    if (!importFile) return;
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
+        if(deleteBeforeImport) {
+            await clearAllData();
+        }
+
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
@@ -54,8 +84,7 @@ export function InventoryPageContent() {
         const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         const newItems: Omit<InventoryItem, 'id' | 'itemStatus'>[] = [];
-        const itemsToUpdate: {id: string, data: Partial<InventoryItem>}[] = [];
-
+        
         let skippedCodeCount = 0;
         let skippedCategoryCount = 0;
 
@@ -67,8 +96,7 @@ export function InventoryPageContent() {
             return;
           }
 
-          const itemCategory = (row['Item Category'] ||
-            row['itemCategory']) as any;
+          const itemCategory = (row['Item Category'] || row['itemCategory']) as any;
           if (!ITEM_CATEGORIES.includes(itemCategory)) {
             skippedCategoryCount++;
             return;
@@ -95,31 +123,16 @@ export function InventoryPageContent() {
             unitPrice: Number(row['Unit Price'] || row['unitPrice'] || 0),
             purchasePrice: Number(row['Purchase Price'] || row['purchasePrice'] || 0),
           };
-
-          const existingItem = getItemByStdCode(itemData.itemStdCode);
-          if (existingItem) {
-             const { id, ...updateData} = itemData;
-             itemsToUpdate.push({ id: existingItem.id, data: updateData });
-          } else {
-            newItems.push(itemData);
-          }
+          newItems.push(itemData);
         });
 
         if (newItems.length > 0) {
           await addBatchItems(newItems);
         }
 
-        if (itemsToUpdate.length > 0) {
-            for (const item of itemsToUpdate) {
-                await updateItem(item.id, item.data);
-            }
-        }
-
         const descriptions = [];
         if (newItems.length > 0)
-          descriptions.push(`${newItems.length} new items added.`);
-        if (itemsToUpdate.length > 0)
-          descriptions.push(`${itemsToUpdate.length} existing items updated.`);
+          descriptions.push(`${newItems.length} new items added/updated.`);
         if (skippedCodeCount > 0)
           descriptions.push(
             `${skippedCodeCount} rows skipped due to missing 'Item STD Code'.`
@@ -142,14 +155,13 @@ export function InventoryPageContent() {
             "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
         });
       } finally {
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+        setImportFile(null);
+        setIsImportAlertOpen(false);
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsArrayBuffer(importFile);
   };
+
 
   return (
     <>
@@ -182,6 +194,27 @@ export function InventoryPageContent() {
         columns={columns({ onEdit: handleEditItem })}
         data={inventory}
       />
+
+      <AlertDialog open={isImportAlertOpen} onOpenChange={setIsImportAlertOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Import Inventory</AlertDialogTitle>
+                <AlertDialogDescription>
+                    You are about to import inventory from <span className='font-bold'>{importFile?.name}</span>. This will add new items and merge existing ones.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex items-center space-x-2">
+                <Checkbox id="delete-before-import" checked={deleteBeforeImport} onCheckedChange={(checked) => setDeleteBeforeImport(!!checked)} />
+                <Label htmlFor="delete-before-import" className='text-destructive font-bold'>Delete all existing inventory before importing</Label>
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setImportFile(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmImport}>Confirm Import</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
+
+    

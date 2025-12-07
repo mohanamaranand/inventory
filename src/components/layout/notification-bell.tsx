@@ -31,10 +31,10 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0">
+      <PopoverContent className="w-96 p-0">
         <div className="flex items-center justify-between p-4">
           <h3 className="text-lg font-semibold">Notifications</h3>
-          {history.length > 0 && (
+          {history.length > 0 && unreadCount > 0 && (
              <Button variant="ghost" size="sm" onClick={markAllAsRead}>
                 <Check className="mr-2 h-4 w-4" />
                 Mark all as read
@@ -50,11 +50,13 @@ export function NotificationBell() {
           ) : (
             <div className="flex flex-col">
               {history.map((toast) => (
-                <div key={toast.id} className="border-b p-4">
+                <div key={toast.id} className="border-b p-4 last:border-b-0">
                   <p className="font-semibold">{toast.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {toast.description}
-                  </p>
+                  {toast.description && (
+                     <p className="text-sm text-muted-foreground">
+                        {toast.description}
+                     </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -64,3 +66,5 @@ export function NotificationBell() {
     </Popover>
   );
 }
+
+    

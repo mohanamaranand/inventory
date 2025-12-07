@@ -25,9 +25,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Upload, Trash2, AlertTriangle, UserX } from "lucide-react";
-import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel } from "@/lib/types";
+import { Download, Upload, Trash2, AlertTriangle, UserX, History, DatabaseBackup, Trash } from "lucide-react";
+import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel, Backup } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
+import { format } from "date-fns";
 
 export function DataManagement() {
   const {
@@ -40,10 +41,15 @@ export function DataManagement() {
     clearAllData,
     restoreAllData,
     deleteCurrentUser,
+    backups,
+    restoreFromBackup,
+    deleteBackup,
   } = useInventory();
   const { toast } = useToast();
   const [isRestoreAlertOpen, setRestoreAlertOpen] = useState(false);
   const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [isRestoreFromBackupOpen, setIsRestoreFromBackupOpen] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
 
 
   const handleDownload = () => {
@@ -175,14 +181,91 @@ export function DataManagement() {
     }
   }
 
+  const handleRestoreBackup = (backup: Backup) => {
+    setSelectedBackup(backup);
+    setIsRestoreFromBackupOpen(true);
+  }
+
+  const confirmRestoreBackup = () => {
+    if (!selectedBackup) return;
+    restoreFromBackup(selectedBackup.id);
+    toast({
+        title: "Restoring from Backup",
+        description: `Your data is being restored to the state of ${format(selectedBackup.createdAt.toDate(), 'PPP p')}.`
+    });
+    setIsRestoreFromBackupOpen(false);
+    setSelectedBackup(null);
+  }
+
+  const handleDeleteBackup = (backupId: string) => {
+    deleteBackup(backupId);
+    toast({
+        variant: 'destructive',
+        title: 'Backup Deleted',
+        description: `The selected backup has been permanently deleted.`
+    });
+  }
+
   return (
     <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle>Backup & Restore</CardTitle>
+          <CardTitle>Cloud Backups</CardTitle>
           <CardDescription>
-            Download your current data as an Excel file for backup, or restore
-            the application state from a backup file.
+            Backups are created automatically before every sync. Restore your entire application state to a previous point in time.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+            {backups.length > 0 ? (
+                <ul className="space-y-2">
+                    {backups.map(backup => (
+                        <li key={backup.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <DatabaseBackup className="h-5 w-5 text-primary" />
+                                <div>
+                                    <p className="font-medium">Backup from {format(backup.createdAt.toDate(), 'PPP p')}</p>
+                                    <p className="text-xs text-muted-foreground">ID: {backup.id.substring(0,8)}...</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                 <Button variant="outline" size="sm" onClick={() => handleRestoreBackup(backup)}>Restore</Button>
+                                 <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="icon"><Trash className="h-4 w-4"/></Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Delete this backup?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action is permanent and cannot be undone. Are you sure you want to delete this backup?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDeleteBackup(backup.id)}>Yes, Delete</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                 </AlertDialog>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
+                    <History className="h-10 w-10 text-muted-foreground" />
+                    <p className="mt-4 text-sm font-medium">No backups found.</p>
+                    <p className="text-xs text-muted-foreground">A backup will be created automatically before your first sync.</p>
+                </div>
+            )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Manual Backup & Restore (Excel)</CardTitle>
+          <CardDescription>
+            Download your current data as an Excel file for offline backup, or restore
+            the application state from a previously downloaded file.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-6">
@@ -285,7 +368,26 @@ export function DataManagement() {
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+        
+        <AlertDialog open={isRestoreFromBackupOpen} onOpenChange={setIsRestoreFromBackupOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Restore Cloud Backup?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will replace all your current local and cloud data with the snapshot from {selectedBackup ? format(selectedBackup.createdAt.toDate(), 'PPP p') : ''}. This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setSelectedBackup(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmRestoreBackup}>
+                        Yes, Restore Backup
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
 
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 import { Timestamp } from 'firebase/firestore';
 
 export const ITEM_CATEGORIES = [
@@ -112,3 +113,21 @@ export interface User {
   photoURL: string | null;
   role: UserRole;
 }
+
+export interface AllData {
+    inventory: InventoryItem[];
+    vehicleModels: VehicleModel[];
+    assembledVehicles: AssembledVehicle[];
+    batteryModels: BatteryModel[];
+    assembledBatteries: AssembledBattery[];
+    customers: Customer[];
+  }
+  
+  export interface Backup {
+    id: string;
+    createdAt: Timestamp;
+    data: AllData;
+  }
+  
+
+    
