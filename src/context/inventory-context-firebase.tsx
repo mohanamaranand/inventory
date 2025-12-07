@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, {
@@ -145,6 +146,26 @@ const InventoryContext = createContext<InventoryContextType | undefined>(
   undefined
 );
 
+// Helper to convert Date objects to Firestore Timestamps
+function convertDatesToTimestamps(data: any): any {
+  if (data instanceof Date) {
+    return Timestamp.fromDate(data);
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => convertDatesToTimestamps(item));
+  }
+  if (typeof data === 'object' && data !== null) {
+    const newData: { [key: string]: any } = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        newData[key] = convertDatesToTimestamps(data[key]);
+      }
+    }
+    return newData;
+  }
+  return data;
+}
+
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const db = useFirestore();
   const auth = useAuth();
@@ -210,7 +231,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db || isSyncing || pendingChanges.length === 0) return;
     setIsSyncing(true);
     
-    // Create backup before syncing
     const backupId = uuidv4();
     const currentData: AllData = {
         inventory: Array.from(cache.inventory.values()),
@@ -219,13 +239,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batteryModels: Array.from(cache.batteryModels.values()),
         assembledBatteries: Array.from(cache.assembledBatteries.values()),
         customers: Array.from(cache.customers.values()),
-        backups: [],
     };
     
     const backupRef = doc(db, "backups", backupId);
     await setDoc(backupRef, {
+        id: backupId,
         createdAt: serverTimestamp(),
-        data: currentData,
+        data: convertDatesToTimestamps(currentData),
     });
     
     const batch = writeBatch(db);
@@ -235,12 +255,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const { type, collection: collectionName, id, payload } = change;
         const docRef = doc(db, collectionName, id);
         
+        const firestorePayload = convertDatesToTimestamps(payload);
+
         switch (type) {
             case 'create':
-                batch.set(docRef, payload);
+                batch.set(docRef, firestorePayload);
                 break;
             case 'update':
-                batch.update(docRef, payload);
+                batch.update(docRef, firestorePayload);
                 break;
             case 'delete':
                 batch.delete(docRef);
@@ -379,7 +401,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? baseData.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? baseData.salesInvoiceNumber : ''),
-            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : (newStatus.includes('Sold') ? serverTimestamp() : undefined)
+            salesDate: splitItemData?.salesDate ?? (newStatus.includes('Sold') ? new Date() : undefined)
         }
 
         const newId = uuidv4();
@@ -476,7 +498,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const avId = uuidv4();
         const newAssembledVehicle = { ...vehicleData, id: avId, assemblyDate: new Date() };
         newCache.assembledVehicles.set(avId, newAssembledVehicle);
-        newChanges.push({ type: 'create', collection: 'assembledVehicles', id: avId, payload: { ...vehicleData, assemblyDate: serverTimestamp() } });
+        newChanges.push({ type: 'create', collection: 'assembledVehicles', id: avId, payload: newAssembledVehicle });
         
         // Create inventory item for the assembled vehicle
         const totalCost = model.parts.reduce((sum, part) => {
@@ -502,7 +524,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             purchasePrice: 0,
         };
         newCache.inventory.set(assembledItemId, assembledItem);
-        newChanges.push({ type: 'create', collection: 'inventory', id: assembledItemId, payload: { ...assembledItem, purchaseDate: serverTimestamp() } });
+        newChanges.push({ type: 'create', collection: 'inventory', id: assembledItemId, payload: assembledItem });
 
         setPendingChanges(prev => [...prev, ...newChanges]);
         return newCache;
@@ -595,7 +617,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const abId = uuidv4();
         const newAssembledBattery = { ...batteryData, id: abId, assemblyDate: new Date() };
         newCache.assembledBatteries.set(abId, newAssembledBattery);
-        newChanges.push({ type: 'create', collection: 'assembledBatteries', id: abId, payload: { ...batteryData, assemblyDate: serverTimestamp() } });
+        newChanges.push({ type: 'create', collection: 'assembledBatteries', id: abId, payload: newAssembledBattery });
         
         // Create inventory item for the assembled battery
         const totalCost = model.parts.reduce((sum, part) => {
@@ -621,7 +643,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             purchasePrice: 0,
         };
         newCache.inventory.set(assembledItemId, assembledItem);
-        newChanges.push({ type: 'create', collection: 'inventory', id: assembledItemId, payload: { ...assembledItem, purchaseDate: serverTimestamp() } });
+        newChanges.push({ type: 'create', collection: 'inventory', id: assembledItemId, payload: assembledItem });
 
         setPendingChanges(prev => [...prev, ...newChanges]);
         return newCache;
@@ -726,7 +748,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 unitPrice: saleItem.unitPrice,
                 itemStatus: saleStatus,
                 salesInvoiceNumber: saleData.salesInvoiceNumber,
-                salesDate: Timestamp.fromDate(saleData.date),
+                salesDate: saleData.date,
                 customerId: saleData.customerId,
             };
             newCache.inventory.set(soldItemId, soldItem);
@@ -923,5 +945,7 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
 
     
