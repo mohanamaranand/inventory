@@ -31,17 +31,19 @@ function getChangeDescription(change: PendingChange): string {
     const { type, collection, payload } = change;
     const collectionName = collection.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
 
+    // Safely access payload properties, with a fallback to the ID
     const name = payload?.name || payload?.productName || `ID ${change.id.substring(0,6)}...`;
 
     switch (type) {
         case 'create':
             return `Create new ${collectionName}: "${name}"`;
         case 'update':
-            const fields = Object.keys(payload).join(', ');
+            const fields = payload ? Object.keys(payload).join(', ') : 'fields';
             return `Update ${collectionName} "${name}": changed ${fields}`;
         case 'delete':
-            // For deletes, we can't get the name from the payload, but the context should have it
-            return `Delete ${collectionName}: "${payload.name || `ID ${change.id}`}"`;
+             // For deletes, payload might not exist. Safely access it.
+            const deleteName = payload?.name || payload?.productName || `ID ${change.id}`;
+            return `Delete ${collectionName}: "${deleteName}"`;
         default:
             return "Unknown change";
     }
