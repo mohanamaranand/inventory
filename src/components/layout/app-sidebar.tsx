@@ -30,6 +30,7 @@ import { useUser } from "@/firebase/auth/use-user";
 import { useAuth } from "@/firebase";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { SyncStatus } from "../sync/sync-status";
 
 const menuItems = [
   {
@@ -94,6 +95,7 @@ export function AppSidebar() {
             <span className="text-lg font-semibold">StockPilot</span>
           </div>
           <div className="flex items-center">
+            <SyncStatus />
             <NotificationBell />
              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
