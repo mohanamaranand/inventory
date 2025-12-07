@@ -19,6 +19,9 @@ import {
   query,
   limit,
   setDoc,
+  deleteDoc,
+  getDoc,
+  addDoc,
 } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useAuth, useFirestore, useMemoFirebase } from '@/firebase';
@@ -32,13 +35,15 @@ import type {
   BatteryModel,
   AssembledBattery,
   Customer,
+  AllData,
+  Backup,
 } from '@/lib/types';
 import { SOLD_STATUSES } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Types for local state management
 type LocalOperation = 'create' | 'update' | 'delete';
-interface PendingChange {
+export interface PendingChange {
     type: LocalOperation;
     collection: string;
     id: string;
@@ -51,16 +56,9 @@ interface LocalCache {
     batteryModels: Map<string, BatteryModel>;
     assembledBatteries: Map<string, AssembledBattery>;
     customers: Map<string, Customer>;
+    backups: Map<string, Backup>;
 }
 
-interface AllData {
-  inventory: InventoryItem[];
-  vehicleModels: VehicleModel[];
-  assembledVehicles: AssembledVehicle[];
-  batteryModels: BatteryModel[];
-  assembledBatteries: AssembledBattery[];
-  customers: Customer[];
-}
 
 interface SaleData {
   customerId: string;
@@ -139,7 +137,8 @@ interface InventoryContextType extends AllData {
   processSale: (saleData: SaleData) => Promise<void>;
 
   clearAllData: () => Promise<void>;
-  restoreAllData: (data: Partial<AllData>) => Promise<void>;
+  restoreFromBackup: (backupId: string) => Promise<void>;
+  deleteBackup: (backupId: string) => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(
@@ -157,6 +156,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     batteryModels: new Map(),
     assembledBatteries: new Map(),
     customers: new Map(),
+    backups: new Map(),
   });
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -168,6 +168,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const batteryModelsQuery = useMemoFirebase(() => db ? collection(db, 'batteryModels') : null, [db]);
   const assembledBatteriesQuery = useMemoFirebase(() => db ? collection(db, 'assembledBatteries') : null, [db]);
   const customersQuery = useMemoFirebase(() => db ? collection(db, 'customers') : null, [db]);
+  const backupsQuery = useMemoFirebase(() => db ? collection(db, 'backups') : null, [db]);
 
   const { data: inventoryData, loading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
   const { data: vehicleModelsData, loading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
@@ -175,6 +176,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { data: batteryModelsData, loading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
   const { data: assembledBatteriesData, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
   const { data: customersData, loading: loadingCustomers } = useCollection<Customer>(customersQuery);
+  const { data: backupsData, loading: loadingBackups } = useCollection<Backup>(backupsQuery);
 
   const loading =
     loadingInventory ||
@@ -182,7 +184,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     loadingAssembledVehicles ||
     loadingBatteryModels ||
     loadingAssembledBatteries ||
-    loadingCustomers;
+    loadingCustomers ||
+    loadingBackups;
 
   // Effect to hydrate local cache from Firestore
   useEffect(() => {
@@ -194,18 +197,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batteryModels: new Map(batteryModelsData?.map(item => [item.id, item])),
         assembledBatteries: new Map(assembledBatteriesData?.map(item => [item.id, item])),
         customers: new Map(customersData?.map(item => [item.id, item])),
+        backups: new Map(backupsData?.map(item => [item.id, item])),
       });
     }
-  }, [loading, inventoryData, vehicleModelsData, assembledVehiclesData, batteryModelsData, assembledBatteriesData, customersData]);
+  }, [loading, inventoryData, vehicleModelsData, assembledVehiclesData, batteryModelsData, assembledBatteriesData, customersData, backupsData]);
   
-  const addChange = (change: Omit<PendingChange, 'timestamp'>) => {
+  const addChange = (change: PendingChange) => {
     setPendingChanges(prev => [...prev, change]);
   };
   
   const syncChanges = useCallback(async () => {
     if (!db || isSyncing || pendingChanges.length === 0) return;
     setIsSyncing(true);
-
+    
+    // Create backup before syncing
+    const backupId = uuidv4();
+    const currentData: AllData = {
+        inventory: Array.from(cache.inventory.values()),
+        vehicleModels: Array.from(cache.vehicleModels.values()),
+        assembledVehicles: Array.from(cache.assembledVehicles.values()),
+        batteryModels: Array.from(cache.batteryModels.values()),
+        assembledBatteries: Array.from(cache.assembledBatteries.values()),
+        customers: Array.from(cache.customers.values()),
+        backups: [],
+    };
+    
+    const backupRef = doc(db, "backups", backupId);
+    await setDoc(backupRef, {
+        createdAt: serverTimestamp(),
+        data: currentData,
+    });
+    
     const batch = writeBatch(db);
     const changesToSync = [...pendingChanges];
 
@@ -234,7 +256,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } finally {
         setIsSyncing(false);
     }
-  }, [db, pendingChanges, isSyncing]);
+  }, [db, pendingChanges, isSyncing, cache]);
 
   const inventory = useMemo(() => Array.from(cache.inventory.values()), [cache.inventory]);
   const vehicleModels = useMemo(() => Array.from(cache.vehicleModels.values()), [cache.vehicleModels]);
@@ -242,6 +264,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const batteryModels = useMemo(() => Array.from(cache.batteryModels.values()), [cache.batteryModels]);
   const assembledBatteries = useMemo(() => Array.from(cache.assembledBatteries.values()), [cache.assembledBatteries]);
   const customers = useMemo(() => Array.from(cache.customers.values()), [cache.customers]);
+  const backups = useMemo(() => Array.from(cache.backups.values()).sort((a,b) => b.createdAt.toMillis() - a.createdAt.toMillis()), [cache.backups]);
+
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
     setCache(prevCache => {
@@ -395,8 +419,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("No user is currently signed in.");
     addChange({ type: 'delete', collection: 'users', id: currentUser.uid });
-    // The actual Firebase auth deletion needs to happen on sync, this is tricky.
-    // For now, let's just delete the user doc. The sync will handle it.
     await syncChanges();
     await deleteFirebaseAuthUser(currentUser);
   }, [auth, syncChanges]);
@@ -408,7 +430,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const id = uuidv4();
     const newModel = { ...model, id };
     setCache(prev => ({ ...prev, vehicleModels: new Map(prev.vehicleModels).set(id, newModel) }));
-    addChange({ type: 'create', collection: 'vehicleModels', id, payload: model });
+    addChange({ type: 'create', collection: 'vehicleModels', id, payload: newModel });
   }, []);
 
   const updateVehicleModel = useCallback(async (id: string, updatedModel: Partial<VehicleModel>) => {
@@ -527,7 +549,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const id = uuidv4();
     const newModel = { ...model, id };
     setCache(prev => ({ ...prev, batteryModels: new Map(prev.batteryModels).set(id, newModel) }));
-    addChange({ type: 'create', collection: 'batteryModels', id, payload: model });
+    addChange({ type: 'create', collection: 'batteryModels', id, payload: newModel });
   }, []);
 
   const updateBatteryModel = useCallback(async (id: string, updatedModel: Partial<BatteryModel>) => {
@@ -727,30 +749,80 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const clearAllData = useCallback(async () => {
-    const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
+    const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers', 'backups'];
     const newChanges: PendingChange[] = [];
-    collections.forEach(coll => {
-        cache[coll].forEach((_, id) => {
-            newChanges.push({ type: 'delete', collection: coll, id });
+    
+    setCache(prevCache => {
+        collections.forEach(coll => {
+            if (prevCache[coll]) {
+                prevCache[coll].forEach((_, id) => {
+                    newChanges.push({ type: 'delete', collection: coll, id });
+                });
+            }
         });
+
+        setPendingChanges(prev => [...prev, ...newChanges]);
+
+        return {
+            inventory: new Map(),
+            vehicleModels: new Map(),
+            assembledVehicles: new Map(),
+            batteryModels: new Map(),
+            assembledBatteries: new Map(),
+            customers: new Map(),
+            backups: new Map(),
+        };
     });
-    setPendingChanges(newChanges);
-    setCache({
+  }, []);
+
+  const restoreFromBackup = useCallback(async (backupId: string) => {
+    if (!db) return;
+    const backupDocRef = doc(db, 'backups', backupId);
+    const backupDoc = await getDoc(backupDocRef);
+    if (!backupDoc.exists()) {
+        console.error("Backup not found");
+        return;
+    }
+    const backupData = backupDoc.data()?.data as AllData;
+
+    await clearAllData();
+
+    const newChanges: PendingChange[] = [];
+    const newCache: Omit<LocalCache, 'backups'> = {
         inventory: new Map(),
         vehicleModels: new Map(),
         assembledVehicles: new Map(),
         batteryModels: new Map(),
         assembledBatteries: new Map(),
         customers: new Map(),
-    });
-    await syncChanges();
-  }, [cache, syncChanges]);
+    };
 
-  const restoreAllData = useCallback(async (data: Partial<AllData>) => {
-    await clearAllData();
-    // This needs to be adapted for local-first. We can directly set the cache and create 'create' ops.
-    console.log("Restore all data needs rework for local-first");
-  }, [clearAllData]);
+    const processCollection = (collectionName: keyof Omit<AllData, 'backups'>) => {
+        if (backupData[collectionName]) {
+            (backupData[collectionName] as any[]).forEach((item: any) => {
+                const id = item.id || uuidv4();
+                newCache[collectionName].set(id, { ...item, id });
+                newChanges.push({ type: 'create', collection: collectionName, id, payload: { ...item } });
+            });
+        }
+    };
+    
+    processCollection('inventory');
+    processCollection('vehicleModels');
+    processCollection('assembledVehicles');
+    processCollection('batteryModels');
+    processCollection('assembledBatteries');
+    processCollection('customers');
+
+    setCache(prev => ({...prev, ...newCache}));
+    setPendingChanges(newChanges);
+
+  }, [db, clearAllData]);
+
+  const deleteBackup = useCallback(async (backupId: string) => {
+      if (!db) return;
+      await deleteDoc(doc(db, "backups", backupId));
+  }, [db]);
 
   const value = useMemo(
     () => ({
@@ -760,6 +832,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       batteryModels,
       assembledBatteries,
       customers,
+      backups,
       loading,
       pendingChanges,
       syncChanges,
@@ -790,7 +863,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getCustomer,
       processSale,
       clearAllData,
-      restoreAllData
+      restoreFromBackup,
+      deleteBackup,
     }),
     [
       inventory,
@@ -799,6 +873,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       batteryModels,
       assembledBatteries,
       customers,
+      backups,
       loading,
       pendingChanges,
       syncChanges,
@@ -826,7 +901,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       deleteCustomer, 
       processSale, 
       clearAllData, 
-      restoreAllData,
+      restoreFromBackup,
+      deleteBackup,
       addItem,
       deleteItem,
       deleteCurrentUser
@@ -847,3 +923,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
