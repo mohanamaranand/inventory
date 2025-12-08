@@ -125,14 +125,13 @@ export function InventoryPageContent() {
           title: 'Import Complete',
           description: descriptions.join(' ') || "No new data to import.",
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error processing Excel file:', error);
         toast({
           id: toastId,
           variant: 'destructive',
           title: 'Import Failed',
-          description:
-            "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
+          description: error.message || "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
         });
       } finally {
         if (fileInputRef.current) {

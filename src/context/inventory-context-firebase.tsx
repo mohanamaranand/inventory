@@ -174,20 +174,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
-    
-    // Simple add, no merging.
+    const docRef = doc(collection(db, 'inventory'));
     const dataToSave = {
-        ...item,
-        purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
-        salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : item.salesDate,
-        productDetails: item.productDetails || '',
-        purchasePrice: item.purchasePrice || 0,
-        salesInvoiceNumber: item.salesInvoiceNumber || '',
-        imageUrl: item.imageUrl || '',
-        itemStatus: item.itemStatus || 'In Stock',
+      ...item,
+      purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+      salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
+      productDetails: item.productDetails || '',
+      purchasePrice: item.purchasePrice || 0,
+      salesInvoiceNumber: item.salesInvoiceNumber || '',
+      imageUrl: item.imageUrl || '',
+      itemStatus: item.itemStatus || 'In Stock',
     };
-
-    await addDoc(collection(db, 'inventory'), dataToSave);
+    await setDoc(docRef, dataToSave);
   }, [db]);
 
 
@@ -201,7 +199,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const dataToSave = {
             ...item,
             purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
-            salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : item.salesDate,
+            salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
             productDetails: item.productDetails || '',
             purchasePrice: item.purchasePrice || 0,
             salesInvoiceNumber: item.salesInvoiceNumber || '',
@@ -222,17 +220,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(docRef, updatedItem);
   };
   
-const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
+  const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
-    // Simplified to just update, no merging.
     const docRef = doc(db, 'inventory', id);
     const dataToSave = {
         ...updatedItemData,
         purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
-        salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : updatedItemData.salesDate,
+        salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : null,
     };
     await updateDoc(docRef, dataToSave as any);
-}, [db]);
+  }, [db]);
 
 
 const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string, salesDate?: Date }) => {
@@ -249,18 +246,19 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             throw new Error('Invalid split quantity');
         }
 
-        // Always create a new item, no merging.
+        const newDocRef = doc(collection(db, 'inventory'));
+        const { id: originalId, ...newItemData } = itemToSplit;
+        
         const newDocPayload: Omit<InventoryItem, 'id'> = {
-            ...itemToSplit,
+            ...newItemData,
             quantity: splitQuantity,
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? '',
             salesDate: splitItemData?.salesDate,
-            purchaseDate: itemToSplit.purchaseDate, // Keep original purchase date
+            purchaseDate: itemToSplit.purchaseDate, 
         };
         
-        const newDocRef = doc(collection(db, 'inventory'));
         transaction.set(newDocRef, newDocPayload);
 
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
