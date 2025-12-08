@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, {
@@ -139,6 +138,7 @@ interface InventoryContextType extends Omit<AllData, 'backups'> {
   processSale: (saleData: SaleData) => Promise<void>;
 
   clearAllData: () => Promise<void>;
+  restoreAllData: (data: Partial<AllData>) => Promise<void>;
   restoreFromBackup: (backupId: string) => Promise<void>;
   deleteBackup: (backupId: string) => Promise<void>;
 }
@@ -240,6 +240,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batteryModels: Array.from(cache.batteryModels.values()),
         assembledBatteries: Array.from(cache.assembledBatteries.values()),
         customers: Array.from(cache.customers.values()),
+        backups: Array.from(cache.backups.values()),
     };
     
     const backupRef = doc(db, "backups", backupId);
@@ -301,7 +302,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       items.forEach(item => {
         let match: InventoryItem | undefined;
-        // Simplified merging logic
+        // Simplified merging logic: find an item with the same std code that's in stock
         for (const existing of newCache.inventory.values()) {
             if (existing.itemStdCode === item.itemStdCode && existing.itemStatus === 'In Stock') {
                 match = existing;
@@ -348,10 +349,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
         const newChanges: PendingChange[] = [];
 
-        if (!newCache.inventory.has(id)) return prevCache;
-        newCache.inventory.delete(id);
-        newChanges.push({ type: 'delete', collection: 'inventory', id });
-
+        if (newCache.inventory.has(id)) {
+          newCache.inventory.delete(id);
+          newChanges.push({ type: 'delete', collection: 'inventory', id });
+        }
+        
         let match: InventoryItem | undefined;
         for (const existing of newCache.inventory.values()) {
             if (existing.itemStdCode === updatedItemData.itemStdCode && existing.itemStatus === 'In Stock') {
@@ -419,19 +421,38 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const itemToDelete = newCache.inventory.get(id);
         if (!itemToDelete) return prevCache;
 
-        newCache.inventory.delete(id);
         const newChanges: PendingChange[] = [{ type: 'delete', collection: 'inventory', id }];
 
         if (restock && SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
-             const { id: originalId, itemStatus, salesDate, salesInvoiceNumber, customerId, ...restoredData } = itemToDelete;
-             const restoredItem = { ...restoredData, itemStatus: 'In Stock' as const, quantity: itemToDelete.quantity };
-             addBatchItems([restoredItem]); // This will handle merging logic
+            const { id: originalId, itemStatus, salesDate, salesInvoiceNumber, customerId, ...restoredData } = itemToDelete;
+            const restoredItemData = { ...restoredData, itemStatus: 'In Stock' as const, quantity: itemToDelete.quantity };
+            
+            let match: InventoryItem | undefined;
+            for (const existing of newCache.inventory.values()) {
+                if (existing.itemStdCode === restoredItemData.itemStdCode && existing.itemStatus === 'In Stock') {
+                    match = existing;
+                    break;
+                }
+            }
+
+            if (match) {
+                 const updatedItem = { ...match, quantity: match.quantity + restoredItemData.quantity };
+                 newCache.inventory.set(match.id, updatedItem);
+                 newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
+            } else {
+                const newId = uuidv4();
+                const newItem = { ...restoredItemData, id: newId };
+                newCache.inventory.set(newId, newItem);
+                newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
+            }
         }
         
+        newCache.inventory.delete(id);
+
         setPendingChanges(prev => [...prev, ...newChanges]);
         return newCache;
      });
-  }, [addBatchItems]);
+  }, []);
 
   const deleteMultipleItems = useCallback(async (ids: string[], restock: boolean = false) => {
     ids.forEach(id => deleteItem(id, restock));
@@ -771,10 +792,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const clearAllData = useCallback(async () => {
-    const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
-    const newChanges: PendingChange[] = [];
-    
     setCache(prevCache => {
+        const newChanges: PendingChange[] = [];
+        
+        const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
+        
         collections.forEach(coll => {
             if (prevCache[coll]) {
                 prevCache[coll].forEach((_, id) => {
@@ -783,7 +805,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             }
         });
 
-        if (prevCache.backups && prevCache.backups.size > 0) {
+        if (prevCache.backups) {
             prevCache.backups.forEach((_, id) => {
                 newChanges.push({ type: 'delete', collection: 'backups', id });
             })
@@ -803,6 +825,42 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const restoreAllData = useCallback(async (data: Partial<AllData>) => {
+    await clearAllData();
+
+    setCache(prevCache => {
+      const newCache = { ...prevCache };
+      const newChanges: PendingChange[] = [];
+
+      const processCollection = <T extends { id: string }>(
+        collectionName: keyof AllData,
+        cacheName: keyof LocalCache
+      ) => {
+        const items = data[collectionName] as T[] | undefined;
+        if (items) {
+          const map = new Map<string, T>();
+          items.forEach(item => {
+            const id = item.id || uuidv4();
+            const newItem = { ...item, id };
+            map.set(id, newItem);
+            newChanges.push({ type: 'create', collection: cacheName, id, payload: newItem });
+          });
+          (newCache as any)[cacheName] = map;
+        }
+      };
+
+      processCollection('inventory', 'inventory');
+      processCollection('vehicleModels', 'vehicleModels');
+      processCollection('assembledVehicles', 'assembledVehicles');
+      processCollection('batteryModels', 'batteryModels');
+      processCollection('assembledBatteries', 'assembledBatteries');
+      processCollection('customers', 'customers');
+      
+      setPendingChanges(prev => [...prev, ...newChanges]);
+      return newCache;
+    });
+  }, [clearAllData]);
+
   const restoreFromBackup = useCallback(async (backupId: string) => {
     if (!db) return;
     const backupDocRef = doc(db, 'backups', backupId);
@@ -816,40 +874,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         console.error("Backup data is empty or invalid");
         return;
     }
-
-    await clearAllData();
-
-    const newChanges: PendingChange[] = [];
-    const newCache: Omit<LocalCache, 'backups'> = {
-        inventory: new Map(),
-        vehicleModels: new Map(),
-        assembledVehicles: new Map(),
-        batteryModels: new Map(),
-        assembledBatteries: new Map(),
-        customers: new Map(),
-    };
-
-    const processCollection = (collectionName: keyof Omit<AllData, 'backups'>) => {
-        if (backupData[collectionName]) {
-            (backupData[collectionName] as any[]).forEach((item: any) => {
-                const id = item.id || uuidv4();
-                newCache[collectionName].set(id, { ...item, id });
-                newChanges.push({ type: 'create', collection: collectionName, id, payload: { ...item } });
-            });
-        }
-    };
-    
-    processCollection('inventory');
-    processCollection('vehicleModels');
-    processCollection('assembledVehicles');
-    processCollection('batteryModels');
-    processCollection('assembledBatteries');
-    processCollection('customers');
-
-    setCache(prev => ({...prev, ...newCache}));
-    setPendingChanges(newChanges);
-
-  }, [db, clearAllData]);
+    await restoreAllData(backupData);
+  }, [db, restoreAllData]);
 
   const deleteBackup = useCallback(async (backupId: string) => {
       if (!db) return;
@@ -895,6 +921,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       getCustomer,
       processSale,
       clearAllData,
+      restoreAllData,
       restoreFromBackup,
       deleteBackup,
     }),
@@ -933,6 +960,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       deleteCustomer, 
       processSale, 
       clearAllData, 
+      restoreAllData,
       restoreFromBackup,
       deleteBackup,
       addItem,
@@ -955,3 +983,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
