@@ -15,7 +15,7 @@ import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
 import { Timestamp } from 'firebase/firestore';
 
 export function InventoryPageContent() {
-  const { inventory, addBatchItems, getItemByStdCode, updateItem, loading } = useInventory();
+  const { addBatchItems, loading } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,9 +40,14 @@ export function InventoryPageContent() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    const { id: toastId } = toast({
+      title: 'Importing Data...',
+      description: 'Parsing Excel file and processing rows. Please wait.',
+    });
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -53,7 +58,7 @@ export function InventoryPageContent() {
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-        const newItems: Omit<InventoryItem, 'id' | 'itemStatus'>[] = [];
+        const newItems: Omit<InventoryItem, 'id'>[] = [];
         
         let skippedCodeCount = 0;
         let skippedCategoryCount = 0;
@@ -75,7 +80,7 @@ export function InventoryPageContent() {
           const purchaseDateValue = row['Purchase Date'] || row['purchaseDate'];
           const purchaseDate = purchaseDateValue ? new Date(purchaseDateValue) : new Date();
 
-          const itemData: Omit<InventoryItem, 'id' | 'itemStatus'> = {
+          const itemData: Omit<InventoryItem, 'id'> = {
             purchaseInvoiceNumber: String(
               row['Purchase Invoice Number'] || row['purchaseInvoiceNumber'] || ''
             ),
@@ -93,11 +98,12 @@ export function InventoryPageContent() {
             ),
             unitPrice: Number(row['Unit Price'] || row['unitPrice'] || 0),
             purchasePrice: Number(row['Purchase Price'] || row['purchasePrice'] || 0),
+            itemStatus: 'In Stock',
             imageUrl: row['Image URL'] || row['imageUrl'] || '',
           };
           newItems.push(itemData);
         });
-
+        
         if (newItems.length > 0) {
           await addBatchItems(newItems);
         }
@@ -115,12 +121,14 @@ export function InventoryPageContent() {
           );
 
         toast({
+          id: toastId,
           title: 'Import Complete',
           description: descriptions.join(' ') || "No new data to import.",
         });
       } catch (error) {
         console.error('Error processing Excel file:', error);
         toast({
+          id: toastId,
           variant: 'destructive',
           title: 'Import Failed',
           description:
@@ -165,8 +173,10 @@ export function InventoryPageContent() {
 
       <DataTable
         columns={columns({ onEdit: handleEditItem })}
-        data={inventory}
+        data={useInventory().inventory}
       />
     </>
   );
 }
+
+    

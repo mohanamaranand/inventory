@@ -68,7 +68,7 @@ interface InventoryContextType {
     item: Omit<InventoryItem, 'id'>
   ) => Promise<void>;
   addBatchItems: (
-    items: Omit<InventoryItem, 'id'| 'itemStatus'>[]
+    items: Omit<InventoryItem, 'id'>[]
   ) => Promise<void>;
   updateItem: (
     id: string,
@@ -174,47 +174,59 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
-
-    // This function now simply adds a new document. The complex merging logic is removed.
-    const itemWithDefaults = {
-        ...item,
-        itemStatus: item.itemStatus || 'In Stock',
-        salesDate: item.salesDate || null, // Ensure salesDate is null if not provided
-    };
-
-    const itemWithTimestamps = {
-        ...itemWithDefaults,
-        purchaseDate: itemWithDefaults.purchaseDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.purchaseDate) : itemWithDefaults.purchaseDate,
-        salesDate: itemWithDefaults.salesDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.salesDate) : itemWithDefaults.salesDate,
-    };
     
-    await addDoc(getCollectionRef('inventory'), itemWithTimestamps);
-
-    }, [db]);
-
-
-    const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
-      if (!db) return;
-  
-      // Use Firestore's batch write for efficiency
-      const batch = writeBatch(db);
-      const inventoryCol = getCollectionRef('inventory');
-      
-      items.forEach(item => {
-        const docRef = doc(inventoryCol);
-        
+    await runTransaction(db, async (transaction) => {
         const itemWithDefaults = {
-          ...item,
-          itemStatus: 'In Stock' as ItemStatus,
-          salesDate: null,
-          purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+            ...item,
+            productDetails: item.productDetails || '',
+            purchasePrice: item.purchasePrice || 0,
+            itemStatus: item.itemStatus || 'In Stock',
+            salesInvoiceNumber: item.salesInvoiceNumber || '',
+            imageUrl: item.imageUrl || '',
+            salesDate: item.salesDate || null,
         };
-        
-        batch.set(docRef, itemWithDefaults);
-      });
-  
-      await batch.commit();
-  }, [db]);
+
+        const q = query(
+            collection(db, 'inventory'),
+            where('itemStdCode', '==', itemWithDefaults.itemStdCode),
+            where('productName', '==', itemWithDefaults.productName),
+            where('productDetails', '==', itemWithDefaults.productDetails),
+            where('itemStatus', '==', itemWithDefaults.itemStatus),
+            where('unitPrice', '==', itemWithDefaults.unitPrice),
+            where('purchasePrice', '==', itemWithDefaults.purchasePrice),
+            where('vendorName', '==', itemWithDefaults.vendorName),
+            where('purchaseInvoiceNumber', '==', itemWithDefaults.purchaseInvoiceNumber),
+            limit(1)
+        );
+
+        const querySnapshot = await transaction.get(q);
+
+        const dataToSave = {
+            ...itemWithDefaults,
+            purchaseDate: itemWithDefaults.purchaseDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.purchaseDate) : itemWithDefaults.purchaseDate,
+            salesDate: itemWithDefaults.salesDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.salesDate) : itemWithDefaults.salesDate,
+        };
+
+        if (!querySnapshot.empty) {
+            const existingDoc = querySnapshot.docs[0];
+            const existingData = existingDoc.data() as InventoryItem;
+            const newQuantity = existingData.quantity + itemWithDefaults.quantity;
+            transaction.update(existingDoc.ref, { quantity: newQuantity });
+        } else {
+            const newDocRef = doc(collection(db, 'inventory'));
+            transaction.set(newDocRef, dataToSave);
+        }
+    });
+}, [db]);
+
+
+const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
+    if (!db) return;
+    // We process items sequentially to avoid race conditions with our merging logic
+    for (const item of items) {
+        await addItem(item);
+    }
+}, [db, addItem]);
   
   
   const updateItem = async (
@@ -560,13 +572,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
     await clearAllData();
     
     if (data.inventory) {
-        const inventoryWithDates = data.inventory.map(item => ({
-            ...item,
-            purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate : Timestamp.fromDate(new Date(item.purchaseDate as any))
-        }))
-        for (const item of inventoryWithDates) {
-            await addItem(item);
-        }
+        await addBatchItems(data.inventory);
     }
 
     const batch = writeBatch(db);
@@ -835,3 +841,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
