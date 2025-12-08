@@ -232,7 +232,7 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
 
     await runTransaction(db, async (transaction) => {
         const originalDocRef = doc(db, 'inventory', id);
-
+        
         const dataWithTimestamps = {
             ...updatedItemData,
             purchaseDate: Timestamp.fromDate(updatedItemData.purchaseDate as Date),
@@ -247,6 +247,8 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             where('unitPrice', '==', dataWithTimestamps.unitPrice),
             where('vendorName', '==', dataWithTimestamps.vendorName),
             where('purchaseInvoiceNumber', '==', dataWithTimestamps.purchaseInvoiceNumber),
+            where('productDetails', '==', dataWithTimestamps.productDetails),
+            where('purchasePrice', '==', dataWithTimestamps.purchasePrice),
             limit(1)
         );
 
@@ -304,6 +306,8 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('unitPrice', '==', newDocPayload.unitPrice),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
+            where('productDetails', '==', newDocPayload.productDetails),
+            where('purchasePrice', '==', newDocPayload.purchasePrice),
             where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
             limit(1)
         );
@@ -778,4 +782,6 @@ export const useInventory = () => {
 };
 
     
+    
+
     
