@@ -57,11 +57,6 @@ const menuItems = [
     label: "Assembly",
   },
   {
-    href: "/restock",
-    icon: Truck,
-    label: "Restock Suggestions",
-  },
-  {
       href: "/reports",
       icon: ClipboardList,
       label: "Reports"
