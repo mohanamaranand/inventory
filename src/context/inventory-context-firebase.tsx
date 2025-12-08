@@ -177,9 +177,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
     for (const item of items) {
       await runTransaction(db, async (transaction) => {
+        // Ensure purchaseDate is a Timestamp
+        const itemWithTimestamp = {
+          ...item,
+          purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+        };
+
         const q = query(
           getCollectionRef('inventory'),
-          where('itemStdCode', '==', item.itemStdCode),
+          where('itemStdCode', '==', itemWithTimestamp.itemStdCode),
           where('itemStatus', '==', 'In Stock'),
           limit(1)
         );
@@ -189,11 +195,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         if (!querySnapshot.empty) {
           const existingDoc = querySnapshot.docs[0];
           const existingData = existingDoc.data() as InventoryItem;
-          const newQuantity = existingData.quantity + item.quantity;
+          const newQuantity = existingData.quantity + itemWithTimestamp.quantity;
           transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
           const docRef = doc(getCollectionRef('inventory'));
-          transaction.set(docRef, { ...item, itemStatus: 'In Stock' });
+          transaction.set(docRef, { ...itemWithTimestamp, itemStatus: 'In Stock' });
         }
       });
     }
@@ -210,6 +216,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         where('unitPrice', '==', item.unitPrice),
         where('vendorName', '==', item.vendorName),
         where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
+        where('purchasePrice', '==', item.purchasePrice),
+        where('productDetails', '==', item.productDetails),
         limit(1)
       );
 
@@ -298,7 +306,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         }
 
         const newDocPayload: Omit<InventoryItem, 'id'> = {
-            ...newItemData,
+            ...(newItemData as Omit<InventoryItem, 'id'>),
             quantity: splitQuantity,
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
