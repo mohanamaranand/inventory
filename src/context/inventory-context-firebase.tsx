@@ -176,8 +176,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) return;
     
     await runTransaction(db, async (transaction) => {
-        const purchaseDateAsTimestamp = item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate;
+        // Ensure purchaseDate is a Timestamp for querying and saving
+        const purchaseDateAsTimestamp = item.purchaseDate instanceof Date
+            ? Timestamp.fromDate(item.purchaseDate)
+            : (item.purchaseDate as Timestamp);
 
+        // Sanitize data for saving and querying
         const dataToSave = {
             ...item,
             productDetails: item.productDetails || '',
@@ -191,15 +195,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
         const q = query(
             collection(db, 'inventory'),
-            where('itemStdCode', '==', dataToSave.itemStdCode || ''),
-            where('productName', '==', dataToSave.productName || ''),
-            where('productDetails', '==', dataToSave.productDetails || ''),
-            where('itemStatus', '==', dataToSave.itemStatus || 'In Stock'),
-            where('unitPrice', '==', dataToSave.unitPrice || 0),
-            where('purchasePrice', '==', dataToSave.purchasePrice || 0),
-            where('vendorName', '==', dataToSave.vendorName || ''),
-            where('purchaseInvoiceNumber', '==', dataToSave.purchaseInvoiceNumber || ''),
-            where('purchaseDate', '==', purchaseDateAsTimestamp),
+            where('itemStdCode', '==', dataToSave.itemStdCode),
+            where('productName', '==', dataToSave.productName),
+            where('productDetails', '==', dataToSave.productDetails),
+            where('itemStatus', '==', dataToSave.itemStatus),
+            where('unitPrice', '==', dataToSave.unitPrice),
+            where('purchasePrice', '==', dataToSave.purchasePrice),
+            where('vendorName', '==', dataToSave.vendorName),
+            where('purchaseInvoiceNumber', '==', dataToSave.purchaseInvoiceNumber),
+            where('purchaseDate', '==', dataToSave.purchaseDate),
             limit(1)
         );
 
@@ -221,6 +225,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
     for (const item of items) {
+        // We call the robust `addItem` for each item to leverage its merging logic.
+        // While a single large batch write is faster for pure inserts, this ensures
+        // data consistency and merging, which is the desired functionality.
         await addItem(item);
     }
   }, [db, addItem]);
@@ -240,9 +247,15 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
     await runTransaction(db, async (transaction) => {
         const originalDocRef = doc(db, 'inventory', id);
         
+        const purchaseDateAsTimestamp = updatedItemData.purchaseDate instanceof Date 
+            ? Timestamp.fromDate(updatedItemData.purchaseDate)
+            : updatedItemData.purchaseDate as Timestamp;
+
         const dataWithTimestamps = {
             ...updatedItemData,
-            purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
+            productDetails: updatedItemData.productDetails || '',
+            purchasePrice: updatedItemData.purchasePrice || 0,
+            purchaseDate: purchaseDateAsTimestamp,
             salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : null,
         };
 
@@ -251,11 +264,12 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             where('itemStdCode', '==', dataWithTimestamps.itemStdCode),
             where('itemStatus', '==', dataWithTimestamps.itemStatus),
             where('productName', '==', dataWithTimestamps.productName),
-            where('productDetails', '==', dataWithTimestamps.productDetails || ''),
+            where('productDetails', '==', dataWithTimestamps.productDetails),
             where('unitPrice', '==', dataWithTimestamps.unitPrice),
-            where('purchasePrice', '==', dataWithTimestamps.purchasePrice || 0),
+            where('purchasePrice', '==', dataWithTimestamps.purchasePrice),
             where('vendorName', '==', dataWithTimestamps.vendorName),
             where('purchaseInvoiceNumber', '==', dataWithTimestamps.purchaseInvoiceNumber),
+            where('purchaseDate', '==', dataWithTimestamps.purchaseDate),
             limit(1)
         );
 
@@ -288,27 +302,28 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             throw new Error('Invalid split quantity');
         }
         
-        const purchaseDateAsTimestamp = itemToSplit.purchaseDate instanceof Date 
+        // This is the critical fix: ensure the date used for the query is a Timestamp.
+        const purchaseDateAsTimestamp = itemToSplit.purchaseDate instanceof Date
             ? Timestamp.fromDate(itemToSplit.purchaseDate)
-            : itemToSplit.purchaseDate;
+            : itemToSplit.purchaseDate as Timestamp;
 
         const newDocPayload = {
             purchaseInvoiceNumber: itemToSplit.purchaseInvoiceNumber,
             vendorName: itemToSplit.vendorName,
-            purchaseDate: purchaseDateAsTimestamp,
+            purchaseDate: purchaseDateAsTimestamp, // Use the guaranteed Timestamp
             itemStdCode: itemToSplit.itemStdCode,
             itemCategory: itemToSplit.itemCategory,
             productName: itemToSplit.productName,
-            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails,
+            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
             quantity: splitQuantity,
             storageLocation: itemToSplit.storageLocation,
             unitPrice: itemToSplit.unitPrice,
-            purchasePrice: itemToSplit.purchasePrice,
+            purchasePrice: itemToSplit.purchasePrice ?? 0,
             itemStatus: newStatus,
-            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
+            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (SOLD_STATUSES.includes(newStatus as any) ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
             salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
             customerId: itemToSplit.customerId,
-            imageUrl: itemToSplit.imageUrl
+            imageUrl: itemToSplit.imageUrl ?? '',
         };
 
         const q = query(
@@ -316,12 +331,12 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
             where('productName', '==', newDocPayload.productName),
-            where('productDetails', '==', newDocPayload.productDetails || ''),
+            where('productDetails', '==', newDocPayload.productDetails),
             where('unitPrice', '==', newDocPayload.unitPrice),
-            where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
+            where('purchasePrice', '==', newDocPayload.purchasePrice),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            where('purchaseDate', '==', purchaseDateAsTimestamp),
+            where('purchaseDate', '==', newDocPayload.purchaseDate),
             limit(1)
         );
         const querySnapshot = await transaction.get(q);
@@ -839,9 +854,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
-
-    
-
-
