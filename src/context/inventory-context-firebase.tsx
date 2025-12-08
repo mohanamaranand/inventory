@@ -202,7 +202,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
         const mergeTargetDoc = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
 
-
         const dataToSave = {
             ...itemWithDefaults,
             purchaseDate: itemWithDefaults.purchaseDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.purchaseDate) : itemWithDefaults.purchaseDate,
@@ -332,7 +331,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             const newDocRef = doc(collection(db, 'inventory'));
             const dataToSet = {
                 ...newDocPayload,
-                purchaseDate: newItemData.purchaseDate instanceof Date ? Timestamp.fromDate(newItemData.purchaseDate) : newItemData.purchaseDate,
+                purchaseDate: newItemData.purchaseDate, // Keep original timestamp/date
             };
             transaction.set(newDocRef, dataToSet);
         }
