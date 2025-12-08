@@ -172,10 +172,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getCollectionRef = (name: string) => collection(db, name);
 
-const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
+  const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
     
     await runTransaction(db, async (transaction) => {
+        const purchaseDateAsTimestamp = item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate;
+
         const dataToSave = {
             ...item,
             productDetails: item.productDetails || '',
@@ -183,20 +185,21 @@ const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
             itemStatus: item.itemStatus || 'In Stock',
             salesInvoiceNumber: item.salesInvoiceNumber || '',
             imageUrl: item.imageUrl || '',
-            purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+            purchaseDate: purchaseDateAsTimestamp,
             salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
         };
 
         const q = query(
             collection(db, 'inventory'),
-            where('itemStdCode', '==', dataToSave.itemStdCode),
-            where('productName', '==', dataToSave.productName),
-            where('productDetails', '==', dataToSave.productDetails),
-            where('itemStatus', '==', dataToSave.itemStatus),
-            where('unitPrice', '==', dataToSave.unitPrice),
-            where('purchasePrice', '==', dataToSave.purchasePrice),
-            where('vendorName', '==', dataToSave.vendorName),
-            where('purchaseInvoiceNumber', '==', dataToSave.purchaseInvoiceNumber),
+            where('itemStdCode', '==', dataToSave.itemStdCode || ''),
+            where('productName', '==', dataToSave.productName || ''),
+            where('productDetails', '==', dataToSave.productDetails || ''),
+            where('itemStatus', '==', dataToSave.itemStatus || 'In Stock'),
+            where('unitPrice', '==', dataToSave.unitPrice || 0),
+            where('purchasePrice', '==', dataToSave.purchasePrice || 0),
+            where('vendorName', '==', dataToSave.vendorName || ''),
+            where('purchaseInvoiceNumber', '==', dataToSave.purchaseInvoiceNumber || ''),
+            where('purchaseDate', '==', purchaseDateAsTimestamp),
             limit(1)
         );
 
@@ -212,17 +215,15 @@ const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
             transaction.set(newDocRef, dataToSave);
         }
     });
-}, [db]);
+  }, [db]);
 
 
-const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
+  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
     for (const item of items) {
-        // We use the robust `addItem` function for each item in the batch.
-        // This ensures consistent logic for both single and batch additions.
         await addItem(item);
     }
-}, [db, addItem]);
+  }, [db, addItem]);
   
   
   const updateItem = async (
@@ -287,21 +288,29 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             throw new Error('Invalid split quantity');
         }
         
-        const { id: tempId, ...baseData } = itemToSplit;
-        
-        const newDocPayload = {
-            ...baseData,
-            quantity: splitQuantity,
-            itemStatus: newStatus,
-            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails,
-            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
-            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
-        };
-
         const purchaseDateAsTimestamp = itemToSplit.purchaseDate instanceof Date 
             ? Timestamp.fromDate(itemToSplit.purchaseDate)
             : itemToSplit.purchaseDate;
-            
+
+        const newDocPayload = {
+            purchaseInvoiceNumber: itemToSplit.purchaseInvoiceNumber,
+            vendorName: itemToSplit.vendorName,
+            purchaseDate: purchaseDateAsTimestamp,
+            itemStdCode: itemToSplit.itemStdCode,
+            itemCategory: itemToSplit.itemCategory,
+            productName: itemToSplit.productName,
+            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails,
+            quantity: splitQuantity,
+            storageLocation: itemToSplit.storageLocation,
+            unitPrice: itemToSplit.unitPrice,
+            purchasePrice: itemToSplit.purchasePrice,
+            itemStatus: newStatus,
+            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
+            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
+            customerId: itemToSplit.customerId,
+            imageUrl: itemToSplit.imageUrl
+        };
+
         const q = query(
             collection(db, 'inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
@@ -315,7 +324,6 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('purchaseDate', '==', purchaseDateAsTimestamp),
             limit(1)
         );
-
         const querySnapshot = await transaction.get(q);
 
         if (!querySnapshot.empty) {
@@ -324,11 +332,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
             const newDocRef = doc(collection(db, 'inventory'));
-            const dataToSet = {
-                ...newDocPayload,
-                purchaseDate: purchaseDateAsTimestamp,
-            };
-            transaction.set(newDocRef, dataToSet);
+            transaction.set(newDocRef, newDocPayload);
         }
 
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
@@ -839,4 +843,5 @@ export const useInventory = () => {
     
 
     
+
 
