@@ -23,7 +23,6 @@ import {
   LogOut,
   User as UserIcon,
 } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { useUser } from "@/firebase/auth/use-user";
