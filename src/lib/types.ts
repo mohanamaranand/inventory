@@ -121,13 +121,4 @@ export interface AllData {
     batteryModels: BatteryModel[];
     assembledBatteries: AssembledBattery[];
     customers: Customer[];
-  }
-  
-  export interface Backup {
-    id: string;
-    createdAt: Timestamp;
-    data: AllData;
-  }
-  
-
-    
+}

@@ -13,27 +13,11 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
 import { Timestamp } from 'firebase/firestore';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-  } from "@/components/ui/alert-dialog";
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
 
 export function InventoryPageContent() {
-  const { inventory, addBatchItems, getItemByStdCode, updateItem, loading, clearAllData } = useInventory();
+  const { inventory, addBatchItems, getItemByStdCode, updateItem, loading } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [isImportAlertOpen, setIsImportAlertOpen] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [deleteBeforeImport, setDeleteBeforeImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -58,21 +42,7 @@ export function InventoryPageContent() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setImportFile(file);
-      setDeleteBeforeImport(false);
-      setIsImportAlertOpen(true);
-    }
-    // Reset file input value to allow re-uploading the same file
-    if(fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const confirmImport = async () => {
-    if (!importFile) return;
-
-    if (deleteBeforeImport) {
-        await clearAllData();
-    }
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -157,11 +127,12 @@ export function InventoryPageContent() {
             "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
         });
       } finally {
-        setImportFile(null);
-        setIsImportAlertOpen(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
-    reader.readAsArrayBuffer(importFile);
+    reader.readAsArrayBuffer(file);
   };
 
 
@@ -196,25 +167,6 @@ export function InventoryPageContent() {
         columns={columns({ onEdit: handleEditItem })}
         data={inventory}
       />
-
-      <AlertDialog open={isImportAlertOpen} onOpenChange={setIsImportAlertOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Import Inventory</AlertDialogTitle>
-                <AlertDialogDescription>
-                    You are about to import inventory from <span className='font-bold'>{importFile?.name}</span>. This will add new items and merge existing ones.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex items-center space-x-2">
-                <Checkbox id="delete-before-import" checked={deleteBeforeImport} onCheckedChange={(checked) => setDeleteBeforeImport(!!checked)} />
-                <Label htmlFor="delete-before-import" className='text-destructive font-bold'>Delete all existing inventory before importing</Label>
-            </div>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setImportFile(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmImport}>Confirm Import</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
