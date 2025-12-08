@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, {
@@ -227,36 +228,38 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
-     if (!db) return;
-     await runTransaction(db, async (transaction) => {
-        const originalDocRef = doc(db, 'inventory', id);
-        
-        const q = query(
-          getCollectionRef('inventory'),
-          where('itemStdCode', '==', updatedItemData.itemStdCode),
-          where('itemStatus', '==', updatedItemData.itemStatus),
-          where('productName', '==', updatedItemData.productName),
-          where('unitPrice', '==', updatedItemData.unitPrice),
-          where('vendorName', '==', updatedItemData.vendorName),
-          where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber),
-          limit(1)
-        );
-      
-        const querySnapshot = await getDocs(q);
-        const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
-
-        transaction.delete(originalDocRef);
-
-        if (mergeTargetDoc) {
-            const existingData = mergeTargetDoc.data() as InventoryItem;
-            const newQuantity = existingData.quantity + updatedItemData.quantity;
-            transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
-        } else {
-            const newDocRef = doc(getCollectionRef('inventory'));
-            transaction.set(newDocRef, updatedItemData);
-        }
-     });
-
+    if (!db) return;
+    await runTransaction(db, async (transaction) => {
+      const originalDocRef = doc(db, 'inventory', id);
+  
+      const q = query(
+        collection(db, 'inventory'),
+        where('itemStdCode', '==', updatedItemData.itemStdCode),
+        where('itemStatus', '==', updatedItemData.itemStatus),
+        where('productName', '==', updatedItemData.productName),
+        where('unitPrice', '==', updatedItemData.unitPrice),
+        where('vendorName', '==', updatedItemData.vendorName),
+        where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber),
+        limit(1)
+      );
+  
+      const querySnapshot = await getDocs(q);
+      const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
+  
+      // Delete the original item first
+      transaction.delete(originalDocRef);
+  
+      if (mergeTargetDoc) {
+        // If a merge target exists, update its quantity
+        const existingData = mergeTargetDoc.data() as InventoryItem;
+        const newQuantity = existingData.quantity + updatedItemData.quantity;
+        transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
+      } else {
+        // Otherwise, create a new item with the full data
+        const newDocRef = doc(collection(db, 'inventory'));
+        transaction.set(newDocRef, updatedItemData);
+      }
+    });
   }, [db]);
 
 
@@ -292,14 +295,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             salesDate: salesDateTimestamp,
         };
 
+        // More precise query for merging
         const q = query(
-            getCollectionRef('inventory'),
+            collection(db, 'inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
             where('productName', '==', newDocPayload.productName),
             where('unitPrice', '==', newDocPayload.unitPrice),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
+            where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
             limit(1)
         );
         
