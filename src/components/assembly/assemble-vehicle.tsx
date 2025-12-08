@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/card";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, CheckCircle, AlertTriangle } from "lucide-react";
-import { useMemo } from "react";
+import { Wrench, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
@@ -45,6 +45,7 @@ const formSchema = z.object({
 export function AssembleVehicle() {
   const { inventory, vehicleModels, assembleVehicle, getItemByStdCode, assembledVehicles } = useInventory();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -89,9 +90,10 @@ export function AssembleVehicle() {
       return;
     }
 
+    setIsSubmitting(true);
     const { id: toastId } = toast({
       title: `Assembling ${selectedModel?.name || 'Vehicle'}...`,
-      description: `Chassis: ${values.chassisNumber}. Please wait.`,
+      description: `Chassis: ${values.chassisNumber}. This may take a moment.`,
     });
 
     try {
@@ -99,8 +101,8 @@ export function AssembleVehicle() {
       toast({
         id: toastId,
         variant: "default",
-        title: `Vehicle Assembled: ${selectedModel?.name}`,
-        description: `The vehicle with chassis number ${values.chassisNumber} has been successfully assembled.`,
+        title: `Assembly Queued: ${selectedModel?.name}`,
+        description: `The vehicle with chassis ${values.chassisNumber} has been added to the assembly queue.`,
       });
       form.reset({ modelId: values.modelId, chassisNumber: "", motorNumber: ""});
     } catch (error: any) {
@@ -110,6 +112,8 @@ export function AssembleVehicle() {
         title: "Assembly Failed",
         description: error.message,
       });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -215,9 +219,9 @@ export function AssembleVehicle() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={!selectedModel || !canAssemble}>
-              <Wrench className="mr-2 h-4 w-4" />
-              Assemble Vehicle
+            <Button type="submit" disabled={!selectedModel || !canAssemble || isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
+              {isSubmitting ? "Queuing..." : "Assemble Vehicle"}
             </Button>
           </CardFooter>
         </form>

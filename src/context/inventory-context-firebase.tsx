@@ -7,6 +7,8 @@ import React, {
   ReactNode,
   useMemo,
   useCallback,
+  useState,
+  useEffect,
 } from 'react';
 import {
   collection,
@@ -49,6 +51,10 @@ interface SaleData {
     unitPrice: number;
   }[];
 }
+
+type AssemblyRequest = 
+  | { type: 'vehicle'; data: Omit<AssembledVehicle, 'id' | 'assemblyDate'> }
+  | { type: 'battery'; data: Omit<AssembledBattery, 'id' | 'assemblyDate'> };
 
 interface InventoryContextType {
   inventory: InventoryItem[];
@@ -130,6 +136,9 @@ const InventoryContext = createContext<InventoryContextType | undefined>(
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const db = useFirestore();
   const auth = useAuth();
+
+  const [assemblyQueue, setAssemblyQueue] = useState<AssemblyRequest[]>([]);
+  const [isProcessingAssembly, setIsProcessingAssembly] = useState(false);
   
   const inventoryQuery = useMemoFirebase(() => db ? collection(db, 'inventory') : null, [db]);
   const vehicleModelsQuery = useMemoFirebase(() => db ? collection(db, 'vehicleModels') : null, [db]);
@@ -175,7 +184,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           limit(1)
         );
   
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await transaction.get(q);
   
         if (!querySnapshot.empty) {
           const existingDoc = querySnapshot.docs[0];
@@ -204,7 +213,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         limit(1)
       );
 
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await transaction.get(q);
 
       if (!querySnapshot.empty) {
         const existingDoc = querySnapshot.docs[0];
@@ -252,7 +261,7 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             limit(1)
         );
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await transaction.get(q);
         const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
 
         if (mergeTargetDoc) {
@@ -312,7 +321,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             limit(1)
         );
         
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await transaction.get(q);
         const mergeTargetDoc = querySnapshot.docs[0];
 
         if (mergeTargetDoc) {
@@ -382,66 +391,9 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   };
   const getVehicleModel = useCallback((id: string) => vehicleModels.find(m => m.id === id), [vehicleModels]);
 
-  const assembleVehicle = async (vehicleData: Omit<AssembledVehicle, 'id' | 'assemblyDate'>) => {
-    await runTransaction(db, async (transaction) => {
-      const model = getVehicleModel(vehicleData.modelId);
-      if (!model || !model.parts) {
-        throw new Error("Vehicle model or its parts not found.");
-      }
-  
-      for (const part of model.parts) {
-        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
-        const itemSnapshot = await getDocs(itemQuery);
-        if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
-          throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
-        }
-      }
-  
-      for (const part of model.parts) {
-        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
-        const itemSnapshot = await getDocs(itemQuery);
-        const itemDoc = itemSnapshot.docs[0];
-        const item = itemDoc.data() as InventoryItem;
-
-        const newQuantity = item.quantity - part.quantity;
-        if (newQuantity > 0) {
-            transaction.update(itemDoc.ref, { quantity: newQuantity });
-        } else {
-            transaction.delete(itemDoc.ref);
-        }
-      }
-  
-      const assembledVehicleRef = doc(collection(db, 'assembledVehicles'));
-      transaction.set(assembledVehicleRef, {
-        ...vehicleData,
-        assemblyDate: serverTimestamp(),
-      });
-  
-      const totalCost = model.parts.reduce((sum, part) => {
-          const item = getItemByStdCode(part.itemStdCode);
-          return sum + (item ? item.unitPrice * part.quantity : 0);
-      }, 0);
-
-      const assembledItem: Omit<InventoryItem, 'id'> = {
-          productName: model.name,
-          productDetails: `Assembled vehicle with Chassis: ${vehicleData.chassisNumber}, Motor: ${vehicleData.motorNumber}`,
-          itemStdCode: `ASM-V-${vehicleData.chassisNumber}`,
-          itemCategory: 'Assembled Vehicle',
-          quantity: 1,
-          unitPrice: totalCost,
-          itemStatus: 'Assembled',
-          purchaseInvoiceNumber: 'ASSEMBLY',
-          vendorName: 'In-House',
-          storageLocation: 'Finished Goods',
-          purchaseDate: serverTimestamp() as Timestamp,
-          imageUrl: '',
-          purchasePrice: 0,
-      };
-      
-      const newInventoryItemRef = doc(collection(db, 'inventory'));
-      transaction.set(newInventoryItemRef, assembledItem);
-    });
-  };
+  const assembleVehicle = useCallback(async (vehicleData: Omit<AssembledVehicle, 'id' | 'assemblyDate'>) => {
+    setAssemblyQueue((prev) => [...prev, { type: 'vehicle', data: vehicleData }]);
+  }, []);
 
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
     await runTransaction(db, async (transaction) => {
@@ -451,16 +403,22 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         
         const vehicle = vehicleDoc.data() as AssembledVehicle;
         const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
-        const inventorySnapshot = await getDocs(inventoryItemQuery);
+        const inventorySnapshot = await transaction.get(inventoryItemQuery);
         
         if (restock) {
             const model = getVehicleModel(vehicle.modelId);
             if (model?.parts) {
                  for (const part of model.parts) {
-                    const item = getItemByStdCode(part.itemStdCode);
-                    if (item) {
-                        const itemRef = doc(db, 'inventory', item.id);
-                        transaction.update(itemRef, { quantity: item.quantity + part.quantity });
+                    const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+                    const itemSnapshot = await transaction.get(itemQuery);
+                    if (!itemSnapshot.empty) {
+                        const itemDoc = itemSnapshot.docs[0];
+                        const itemData = itemDoc.data() as InventoryItem;
+                        transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
+                    } else {
+                        // This part is complex: what if the part item doesn't exist anymore?
+                        // We would need a master list of all possible parts to recreate it.
+                        // For now, we'll skip restocking non-existent items.
                     }
                 }
             }
@@ -481,65 +439,9 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   };
   const getBatteryModel = useCallback((id: string) => batteryModels.find(m => m.id === id), [batteryModels]);
   
-  const assembleBattery = async (batteryData: Omit<AssembledBattery, 'id' | 'assemblyDate'>) => {
-    await runTransaction(db, async (transaction) => {
-      const model = getBatteryModel(batteryData.modelId);
-      if (!model || !model.parts) {
-          throw new Error("Battery model or its parts not found.");
-      }
-
-      for (const part of model.parts) {
-        const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
-        const itemSnapshot = await getDocs(itemQuery);
-        if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
-          throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
-        }
-      }
-
-      for (const part of model.parts) {
-          const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
-          const itemSnapshot = await getDocs(itemQuery);
-          const itemDoc = itemSnapshot.docs[0];
-          const item = itemDoc.data() as InventoryItem;
-  
-          const newQuantity = item.quantity - part.quantity;
-          if (newQuantity > 0) {
-              transaction.update(itemDoc.ref, { quantity: newQuantity });
-          } else {
-              transaction.delete(itemDoc.ref);
-          }
-      }
-
-      const assembledBatteryRef = doc(collection(db, 'assembledBatteries'));
-      transaction.set(assembledBatteryRef, {
-          ...batteryData,
-          assemblyDate: serverTimestamp(),
-      });
-
-      const totalCost = model.parts.reduce((sum, part) => {
-        const item = getItemByStdCode(part.itemStdCode);
-        return sum + (item ? item.unitPrice * part.quantity : 0);
-      }, 0);
-
-      const assembledItem: Omit<InventoryItem, 'id'> = {
-        productName: model.name,
-        productDetails: `Assembled battery with Serial: ${batteryData.serialNumber}`,
-        itemStdCode: `ASM-B-${batteryData.serialNumber}`,
-        itemCategory: 'Assembled Battery',
-        quantity: 1,
-        unitPrice: totalCost,
-        itemStatus: 'Assembled',
-        purchaseInvoiceNumber: 'ASSEMBLY',
-        vendorName: 'In-House',
-        storageLocation: 'Finished Goods',
-        purchaseDate: serverTimestamp() as Timestamp,
-        imageUrl: '',
-        purchasePrice: 0,
-    };
-    const newInventoryItemRef = doc(collection(db, 'inventory'));
-    transaction.set(newInventoryItemRef, assembledItem);
-  });
-  };
+  const assembleBattery = useCallback(async (batteryData: Omit<AssembledBattery, 'id' | 'assemblyDate'>) => {
+    setAssemblyQueue((prev) => [...prev, { type: 'battery', data: batteryData }]);
+  }, []);
 
   const deleteAssembledBattery = async (id: string, restock: boolean = false) => {
     await runTransaction(db, async (transaction) => {
@@ -550,16 +452,18 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         const battery = batteryDoc.data() as AssembledBattery;
 
         const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
-        const inventorySnapshot = await getDocs(inventoryItemQuery);
+        const inventorySnapshot = await transaction.get(inventoryItemQuery);
 
         if (restock) {
             const model = getBatteryModel(battery.modelId);
             if (model?.parts) {
                 for (const part of model.parts) {
-                    const item = getItemByStdCode(part.itemStdCode);
-                    if (item) {
-                        const itemRef = doc(db, 'inventory', item.id);
-                        transaction.update(itemRef, { quantity: item.quantity + part.quantity });
+                    const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+                    const itemSnapshot = await transaction.get(itemQuery);
+                    if (!itemSnapshot.empty) {
+                        const itemDoc = itemSnapshot.docs[0];
+                        const itemData = itemDoc.data() as InventoryItem;
+                        transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
                     }
                 }
             }
@@ -689,6 +593,150 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
     await batch.commit();
   }
 
+  // Effect to process the assembly queue
+  useEffect(() => {
+    if (assemblyQueue.length === 0 || isProcessingAssembly) {
+      return;
+    }
+
+    const processQueue = async () => {
+      setIsProcessingAssembly(true);
+      const request = assemblyQueue[0];
+
+      try {
+        if (request.type === 'vehicle') {
+          await runTransaction(db, async (transaction) => {
+            const vehicleData = request.data;
+            const model = getVehicleModel(vehicleData.modelId);
+            if (!model || !model.parts) {
+              throw new Error("Vehicle model or its parts not found.");
+            }
+        
+            for (const part of model.parts) {
+                const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+                const itemSnapshot = await transaction.get(itemQuery);
+                if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
+                    throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
+                }
+            }
+        
+            for (const part of model.parts) {
+                const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+                const itemSnapshot = await transaction.get(itemQuery);
+                const itemDoc = itemSnapshot.docs[0];
+                const item = itemDoc.data() as InventoryItem;
+
+                const newQuantity = item.quantity - part.quantity;
+                if (newQuantity > 0) {
+                    transaction.update(itemDoc.ref, { quantity: newQuantity });
+                } else {
+                    transaction.delete(itemDoc.ref);
+                }
+            }
+        
+            const assembledVehicleRef = doc(collection(db, 'assembledVehicles'));
+            transaction.set(assembledVehicleRef, {
+              ...vehicleData,
+              assemblyDate: serverTimestamp(),
+            });
+        
+            const totalCost = model.parts.reduce((sum, part) => {
+                const item = getItemByStdCode(part.itemStdCode);
+                return sum + (item ? item.unitPrice * part.quantity : 0);
+            }, 0);
+
+            const assembledItem: Omit<InventoryItem, 'id'> = {
+                productName: model.name,
+                productDetails: `Assembled vehicle with Chassis: ${vehicleData.chassisNumber}, Motor: ${vehicleData.motorNumber}`,
+                itemStdCode: `ASM-V-${vehicleData.chassisNumber}`,
+                itemCategory: 'Assembled Vehicle',
+                quantity: 1,
+                unitPrice: totalCost,
+                itemStatus: 'Assembled',
+                purchaseInvoiceNumber: 'ASSEMBLY',
+                vendorName: 'In-House',
+                storageLocation: 'Finished Goods',
+                purchaseDate: serverTimestamp() as Timestamp,
+                imageUrl: '',
+                purchasePrice: 0,
+            };
+            
+            const newInventoryItemRef = doc(collection(db, 'inventory'));
+            transaction.set(newInventoryItemRef, assembledItem);
+          });
+        } else if (request.type === 'battery') {
+            await runTransaction(db, async (transaction) => {
+                const batteryData = request.data;
+                const model = getBatteryModel(batteryData.modelId);
+                if (!model || !model.parts) {
+                    throw new Error("Battery model or its parts not found.");
+                }
+          
+                for (const part of model.parts) {
+                  const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+                  const itemSnapshot = await transaction.get(itemQuery);
+                  if (itemSnapshot.empty || (itemSnapshot.docs[0].data() as InventoryItem).quantity < part.quantity) {
+                    throw new Error(`Insufficient stock for part code ${part.itemStdCode}.`);
+                  }
+                }
+          
+                for (const part of model.parts) {
+                    const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+                    const itemSnapshot = await transaction.get(itemQuery);
+                    const itemDoc = itemSnapshot.docs[0];
+                    const item = itemDoc.data() as InventoryItem;
+            
+                    const newQuantity = item.quantity - part.quantity;
+                    if (newQuantity > 0) {
+                        transaction.update(itemDoc.ref, { quantity: newQuantity });
+                    } else {
+                        transaction.delete(itemDoc.ref);
+                    }
+                }
+          
+                const assembledBatteryRef = doc(collection(db, 'assembledBatteries'));
+                transaction.set(assembledBatteryRef, {
+                    ...batteryData,
+                    assemblyDate: serverTimestamp(),
+                });
+          
+                const totalCost = model.parts.reduce((sum, part) => {
+                  const item = getItemByStdCode(part.itemStdCode);
+                  return sum + (item ? item.unitPrice * part.quantity : 0);
+                }, 0);
+          
+                const assembledItem: Omit<InventoryItem, 'id'> = {
+                  productName: model.name,
+                  productDetails: `Assembled battery with Serial: ${batteryData.serialNumber}`,
+                  itemStdCode: `ASM-B-${batteryData.serialNumber}`,
+                  itemCategory: 'Assembled Battery',
+                  quantity: 1,
+                  unitPrice: totalCost,
+                  itemStatus: 'Assembled',
+                  purchaseInvoiceNumber: 'ASSEMBLY',
+                  vendorName: 'In-House',
+                  storageLocation: 'Finished Goods',
+                  purchaseDate: serverTimestamp() as Timestamp,
+                  imageUrl: '',
+                  purchasePrice: 0,
+              };
+              const newInventoryItemRef = doc(collection(db, 'inventory'));
+              transaction.set(newInventoryItemRef, assembledItem);
+            });
+        }
+      } catch (error) {
+        console.error("Failed to process assembly request:", error);
+        // Optionally, re-add the request to the queue to retry, or notify the user.
+      } finally {
+        setAssemblyQueue((prev) => prev.slice(1));
+        setIsProcessingAssembly(false);
+      }
+    };
+
+    processQueue();
+  }, [assemblyQueue, isProcessingAssembly, db, getVehicleModel, getBatteryModel, getItemByStdCode]);
+
+
   const value = useMemo(
     () => ({
       inventory,
@@ -780,8 +828,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
-    
-
-    
