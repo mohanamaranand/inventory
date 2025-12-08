@@ -40,10 +40,10 @@ import {
   SOLD_STATUSES,
   type InventoryItem,
 } from "@/lib/types";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, AlertTriangle } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
@@ -84,6 +84,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
   const { toast } = useToast();
   const { user } = useUser();
   const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const editingItem = itemId ? getItem(itemId) : null;
 
@@ -113,33 +114,13 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
 
   useEffect(() => {
     if (editingItem) {
-      let purchaseDate: Date;
-      if (editingItem.purchaseDate) {
-          if (editingItem.purchaseDate instanceof Timestamp) {
-              purchaseDate = editingItem.purchaseDate.toDate();
-          } else if (editingItem.purchaseDate instanceof Date) {
-              purchaseDate = editingItem.purchaseDate;
-          } else {
-              const d = new Date(editingItem.purchaseDate);
-              purchaseDate = !isNaN(d.getTime()) ? d : new Date();
-          }
-      } else {
-          purchaseDate = new Date();
-      }
+      const purchaseDate = editingItem.purchaseDate instanceof Timestamp 
+        ? editingItem.purchaseDate.toDate() 
+        : new Date(editingItem.purchaseDate || new Date());
 
-      let salesDate: Date | undefined;
-      if (editingItem.salesDate) {
-          if (editingItem.salesDate instanceof Timestamp) {
-              salesDate = editingItem.salesDate.toDate();
-          } else if (editingItem.salesDate instanceof Date) {
-              salesDate = editingItem.salesDate;
-          } else {
-              const d = new Date(editingItem.salesDate);
-              if (!isNaN(d.getTime())) {
-                  salesDate = d;
-              }
-          }
-      }
+      const salesDate = editingItem.salesDate 
+        ? (editingItem.salesDate instanceof Timestamp ? editingItem.salesDate.toDate() : new Date(editingItem.salesDate))
+        : undefined;
 
       form.reset({
         ...editingItem,
@@ -172,6 +153,13 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
   }, [editingItem, form, open]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    const opType = editingItem ? (showSplit ? "Splitting" : "Updating") : "Adding";
+    const { id: toastId } = toast({
+      title: `${opType} Item...`,
+      description: `Saving "${values.productName}". Please wait.`,
+    });
+
     try {
         const submissionValues: Omit<InventoryItem, 'id'> = {
             ...values,
@@ -187,7 +175,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
             if (!editingItem || values.splitQuantity > editingItem.quantity) {
               form.setError("splitQuantity", { message: "Split quantity cannot be greater than current quantity."});
-              return;
+              throw new Error("Invalid split quantity.");
             }
             await splitItem(
                 editingItem.id,
@@ -199,28 +187,24 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                     salesDate: submissionValues.salesDate
                 }
             );
-            toast({ title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
+            toast({ id: toastId, variant: "default", title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
-            const { splitQuantity, ...updateData } = submissionValues;
-            await editAndMergeItem(itemId, updateData as Omit<InventoryItem, 'id'>);
-            toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated and combined with any matching items.` });
+            await editAndMergeItem(itemId, submissionValues);
+            toast({ id: toastId, variant: "default", title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
         } else {
-            const { splitQuantity, ...addData } = submissionValues;
-            await addItem({
-                ...addData,
-                purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate),
-                salesDate: submissionValues.salesDate ? Timestamp.fromDate(submissionValues.salesDate) : undefined,
-            } as Omit<InventoryItem, 'id'>);
-            toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
+            await addItem(submissionValues);
+            toast({ id: toastId, variant: "default", title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
         }
         onFormSubmit();
     } catch (error: any) {
-        console.error("Form submission error:", error);
         toast({
+            id: toastId,
             variant: "destructive",
-            title: "Operation Failed",
+            title: `${opType} Failed`,
             description: error.message || "An error occurred while saving the item."
         })
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -559,7 +543,10 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 <SheetClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                 </SheetClose>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                   {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                   {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </Button>
             </SheetFooter>
           </form>
         </Form>
@@ -567,5 +554,3 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
-
-    

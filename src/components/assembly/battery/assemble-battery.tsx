@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/card";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, CheckCircle, AlertTriangle } from "lucide-react";
-import { useMemo } from "react";
+import { Wrench, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -44,6 +44,8 @@ const formSchema = z.object({
 export function AssembleBattery() {
   const { batteryModels, assembleBattery, getItemByStdCode, assembledBatteries } = useInventory();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -75,7 +77,7 @@ export function AssembleBattery() {
   
   const canAssemble = partsAvailability.every(p => p.sufficient);
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (assembledBatteries.some(b => b.serialNumber === values.serialNumber)) {
       form.setError("serialNumber", {
         type: "manual",
@@ -84,19 +86,30 @@ export function AssembleBattery() {
       return;
     }
 
+    setIsSubmitting(true);
+    const { id: toastId } = toast({
+      title: "Assembling Battery...",
+      description: "Please wait while we update your inventory.",
+    });
+
     try {
-      assembleBattery({ ...values });
+      await assembleBattery({ ...values });
       toast({
+        id: toastId,
+        variant: "default",
         title: "Battery Assembled!",
         description: `A new ${selectedModel?.name} has been built. Inventory updated.`,
       });
       form.reset({ modelId: values.modelId, serialNumber: ""});
     } catch (error: any) {
       toast({
+        id: toastId,
         variant: "destructive",
         title: "Assembly Failed",
         description: error.message,
       });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -189,9 +202,13 @@ export function AssembleBattery() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={!selectedModel || !canAssemble}>
-              <Wrench className="mr-2 h-4 w-4" />
-              Assemble Battery
+            <Button type="submit" disabled={!selectedModel || !canAssemble || isSubmitting}>
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wrench className="mr-2 h-4 w-4" />
+              )}
+              {isSubmitting ? "Assembling..." : "Assemble Battery"}
             </Button>
           </CardFooter>
         </form>

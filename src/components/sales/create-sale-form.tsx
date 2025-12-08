@@ -24,7 +24,7 @@ import {
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, ShoppingCart, Check, ChevronsUpDown } from "lucide-react";
+import { PlusCircle, Trash2, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useRouter } from 'next/navigation';
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const saleItemSchema = z.object({
   itemId: z.string().min(1, "Please select an item."),
@@ -51,6 +51,7 @@ export function CreateSaleForm() {
   const { customers, inventory, processSale } = useInventory();
   const { toast } = useToast();
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -77,20 +78,31 @@ export function CreateSaleForm() {
     ), [inventory]);
 
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    const { id: toastId } = toast({
+      title: "Creating Sale...",
+      description: "Processing your sales order, please wait.",
+    });
+
     try {
-      processSale(values);
+      await processSale(values);
       toast({
+        id: toastId,
+        variant: "default",
         title: "Sale Created!",
         description: `Invoice ${values.salesInvoiceNumber} has been processed successfully.`,
       });
       router.push('/sales');
     } catch (error: any) {
       toast({
+        id: toastId,
         variant: "destructive",
         title: "Sale Failed",
         description: error.message,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -313,9 +325,9 @@ export function CreateSaleForm() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit">
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Complete Sale
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShoppingCart className="mr-2 h-4 w-4" />}
+              {isSubmitting ? "Processing..." : "Complete Sale"}
             </Button>
           </CardFooter>
         </form>
