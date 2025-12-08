@@ -199,19 +199,20 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             limit(1)
         );
 
-        const querySnapshot = await transaction.get(q);
+        const querySnapshot = await getDocs(q);
+        const mergeTargetDoc = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
+
 
         const dataToSave = {
             ...itemWithDefaults,
             purchaseDate: itemWithDefaults.purchaseDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.purchaseDate) : itemWithDefaults.purchaseDate,
-            salesDate: itemWithDefaults.salesDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.salesDate) : itemWithDefaults.salesDate,
+            salesDate: itemWithDefaults.salesDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.salesDate) : null,
         };
 
-        if (!querySnapshot.empty) {
-            const existingDoc = querySnapshot.docs[0];
-            const existingData = existingDoc.data() as InventoryItem;
+        if (mergeTargetDoc) {
+            const existingData = mergeTargetDoc.data() as InventoryItem;
             const newQuantity = existingData.quantity + itemWithDefaults.quantity;
-            transaction.update(existingDoc.ref, { quantity: newQuantity });
+            transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
         } else {
             const newDocRef = doc(collection(db, 'inventory'));
             transaction.set(newDocRef, dataToSave);
@@ -222,7 +223,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
 const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
-    // We process items sequentially to avoid race conditions with our merging logic
     for (const item of items) {
         await addItem(item);
     }
@@ -266,13 +266,11 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
         const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
 
         if (mergeTargetDoc) {
-            // Found a doc to merge with. Update it and delete the original.
             const existingData = mergeTargetDoc.data() as InventoryItem;
             const newQuantity = existingData.quantity + dataWithTimestamps.quantity;
             transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
             transaction.delete(originalDocRef);
         } else {
-            // No doc to merge with. Just update the original doc.
             transaction.set(originalDocRef, dataWithTimestamps);
         }
     });
@@ -295,6 +293,8 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
 
         const { id: originalId, ...newItemData } = itemToSplit;
         
+        const newProductDetails = splitItemData?.productDetails ?? newItemData.productDetails;
+        
         let salesDateTimestamp: Timestamp | null = null;
         if (newStatus.includes('Sold') && splitItemData?.salesDate) {
             salesDateTimestamp = Timestamp.fromDate(splitItemData.salesDate);
@@ -304,7 +304,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             ...(newItemData as Omit<InventoryItem, 'id'>),
             quantity: splitQuantity,
             itemStatus: newStatus,
-            productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
+            productDetails: newProductDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
             salesDate: salesDateTimestamp,
         };
@@ -314,7 +314,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
             where('productName', '==', newDocPayload.productName),
-            where('productDetails', '==', newDocPayload.productDetails || ''),
+            where('productDetails', '==', newProductDetails || ''),
             where('unitPrice', '==', newDocPayload.unitPrice),
             where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
             where('vendorName', '==', newDocPayload.vendorName),
