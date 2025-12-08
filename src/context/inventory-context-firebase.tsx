@@ -175,62 +175,43 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
     
-    await runTransaction(db, async (transaction) => {
-        // Ensure purchaseDate is a Timestamp for querying and saving
-        const purchaseDateAsTimestamp = item.purchaseDate instanceof Date
-            ? Timestamp.fromDate(item.purchaseDate)
-            : (item.purchaseDate as Timestamp);
+    // Simple add, no merging.
+    const dataToSave = {
+        ...item,
+        purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+        salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : item.salesDate,
+        productDetails: item.productDetails || '',
+        purchasePrice: item.purchasePrice || 0,
+        salesInvoiceNumber: item.salesInvoiceNumber || '',
+        imageUrl: item.imageUrl || '',
+        itemStatus: item.itemStatus || 'In Stock',
+    };
 
-        // Sanitize data for saving and querying
-        const dataToSave = {
-            ...item,
-            productDetails: item.productDetails || '',
-            purchasePrice: item.purchasePrice || 0,
-            itemStatus: item.itemStatus || 'In Stock',
-            salesInvoiceNumber: item.salesInvoiceNumber || '',
-            imageUrl: item.imageUrl || '',
-            purchaseDate: purchaseDateAsTimestamp,
-            salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
-        };
-
-        const q = query(
-            collection(db, 'inventory'),
-            where('itemStdCode', '==', dataToSave.itemStdCode),
-            where('productName', '==', dataToSave.productName),
-            where('productDetails', '==', dataToSave.productDetails),
-            where('itemStatus', '==', dataToSave.itemStatus),
-            where('unitPrice', '==', dataToSave.unitPrice),
-            where('purchasePrice', '==', dataToSave.purchasePrice),
-            where('vendorName', '==', dataToSave.vendorName),
-            where('purchaseInvoiceNumber', '==', dataToSave.purchaseInvoiceNumber),
-            where('purchaseDate', '==', dataToSave.purchaseDate),
-            limit(1)
-        );
-
-        const querySnapshot = await transaction.get(q);
-        const mergeTargetDoc = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
-
-        if (mergeTargetDoc) {
-            const existingData = mergeTargetDoc.data() as InventoryItem;
-            const newQuantity = existingData.quantity + dataToSave.quantity;
-            transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
-        } else {
-            const newDocRef = doc(collection(db, 'inventory'));
-            transaction.set(newDocRef, dataToSave);
-        }
-    });
+    await addDoc(collection(db, 'inventory'), dataToSave);
   }, [db]);
 
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
+    const batch = writeBatch(db);
+    const inventoryRef = collection(db, 'inventory');
+    
     for (const item of items) {
-        // We call the robust `addItem` for each item to leverage its merging logic.
-        // While a single large batch write is faster for pure inserts, this ensures
-        // data consistency and merging, which is the desired functionality.
-        await addItem(item);
+        const docRef = doc(inventoryRef);
+        const dataToSave = {
+            ...item,
+            purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+            salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : item.salesDate,
+            productDetails: item.productDetails || '',
+            purchasePrice: item.purchasePrice || 0,
+            salesInvoiceNumber: item.salesInvoiceNumber || '',
+            imageUrl: item.imageUrl || '',
+            itemStatus: item.itemStatus || 'In Stock',
+        };
+        batch.set(docRef, dataToSave);
     }
-  }, [db, addItem]);
+    await batch.commit();
+  }, [db]);
   
   
   const updateItem = async (
@@ -243,48 +224,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
 const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
-
-    await runTransaction(db, async (transaction) => {
-        const originalDocRef = doc(db, 'inventory', id);
-        
-        const purchaseDateAsTimestamp = updatedItemData.purchaseDate instanceof Date 
-            ? Timestamp.fromDate(updatedItemData.purchaseDate)
-            : updatedItemData.purchaseDate as Timestamp;
-
-        const dataWithTimestamps = {
-            ...updatedItemData,
-            productDetails: updatedItemData.productDetails || '',
-            purchasePrice: updatedItemData.purchasePrice || 0,
-            purchaseDate: purchaseDateAsTimestamp,
-            salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : null,
-        };
-
-        const q = query(
-            collection(db, 'inventory'),
-            where('itemStdCode', '==', dataWithTimestamps.itemStdCode),
-            where('itemStatus', '==', dataWithTimestamps.itemStatus),
-            where('productName', '==', dataWithTimestamps.productName),
-            where('productDetails', '==', dataWithTimestamps.productDetails),
-            where('unitPrice', '==', dataWithTimestamps.unitPrice),
-            where('purchasePrice', '==', dataWithTimestamps.purchasePrice),
-            where('vendorName', '==', dataWithTimestamps.vendorName),
-            where('purchaseInvoiceNumber', '==', dataWithTimestamps.purchaseInvoiceNumber),
-            where('purchaseDate', '==', dataWithTimestamps.purchaseDate),
-            limit(1)
-        );
-
-        const querySnapshot = await transaction.get(q);
-        const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
-
-        if (mergeTargetDoc) {
-            const existingData = mergeTargetDoc.data() as InventoryItem;
-            const newQuantity = existingData.quantity + dataWithTimestamps.quantity;
-            transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
-            transaction.delete(originalDocRef);
-        } else {
-            transaction.set(originalDocRef, dataWithTimestamps);
-        }
-    });
+    // Simplified to just update, no merging.
+    const docRef = doc(db, 'inventory', id);
+    const dataToSave = {
+        ...updatedItemData,
+        purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
+        salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : updatedItemData.salesDate,
+    };
+    await updateDoc(docRef, dataToSave as any);
 }, [db]);
 
 
@@ -301,54 +248,20 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         if (splitQuantity <= 0 || splitQuantity > itemToSplit.quantity) {
             throw new Error('Invalid split quantity');
         }
-        
-        // This is the critical fix: ensure the date used for the query is a Timestamp.
-        const purchaseDateAsTimestamp = itemToSplit.purchaseDate instanceof Date
-            ? Timestamp.fromDate(itemToSplit.purchaseDate)
-            : itemToSplit.purchaseDate as Timestamp;
 
-        const newDocPayload = {
-            purchaseInvoiceNumber: itemToSplit.purchaseInvoiceNumber,
-            vendorName: itemToSplit.vendorName,
-            purchaseDate: purchaseDateAsTimestamp, // Use the guaranteed Timestamp
-            itemStdCode: itemToSplit.itemStdCode,
-            itemCategory: itemToSplit.itemCategory,
-            productName: itemToSplit.productName,
-            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
+        // Always create a new item, no merging.
+        const newDocPayload: Omit<InventoryItem, 'id'> = {
+            ...itemToSplit,
             quantity: splitQuantity,
-            storageLocation: itemToSplit.storageLocation,
-            unitPrice: itemToSplit.unitPrice,
-            purchasePrice: itemToSplit.purchasePrice ?? 0,
             itemStatus: newStatus,
-            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (SOLD_STATUSES.includes(newStatus as any) ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
-            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
-            customerId: itemToSplit.customerId,
-            imageUrl: itemToSplit.imageUrl ?? '',
+            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
+            salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? '',
+            salesDate: splitItemData?.salesDate,
+            purchaseDate: itemToSplit.purchaseDate, // Keep original purchase date
         };
-
-        const q = query(
-            collection(db, 'inventory'),
-            where('itemStdCode', '==', newDocPayload.itemStdCode),
-            where('itemStatus', '==', newDocPayload.itemStatus),
-            where('productName', '==', newDocPayload.productName),
-            where('productDetails', '==', newDocPayload.productDetails),
-            where('unitPrice', '==', newDocPayload.unitPrice),
-            where('purchasePrice', '==', newDocPayload.purchasePrice),
-            where('vendorName', '==', newDocPayload.vendorName),
-            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            where('purchaseDate', '==', newDocPayload.purchaseDate),
-            limit(1)
-        );
-        const querySnapshot = await transaction.get(q);
-
-        if (!querySnapshot.empty) {
-            const existingDoc = querySnapshot.docs[0];
-            const existingData = existingDoc.data() as InventoryItem;
-            transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
-        } else {
-            const newDocRef = doc(collection(db, 'inventory'));
-            transaction.set(newDocRef, newDocPayload);
-        }
+        
+        const newDocRef = doc(collection(db, 'inventory'));
+        transaction.set(newDocRef, newDocPayload);
 
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
