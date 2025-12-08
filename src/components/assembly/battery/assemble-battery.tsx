@@ -44,8 +44,6 @@ const formSchema = z.object({
 export function AssembleBattery() {
   const { batteryModels, assembleBattery, getItemByStdCode, assembledBatteries } = useInventory();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -86,7 +84,6 @@ export function AssembleBattery() {
       return;
     }
 
-    setIsSubmitting(true);
     const { id: toastId } = toast({
       title: "Assembling Battery...",
       description: "Please wait while we update your inventory.",
@@ -108,8 +105,6 @@ export function AssembleBattery() {
         title: "Assembly Failed",
         description: error.message,
       });
-    } finally {
-        setIsSubmitting(false);
     }
   }
 
@@ -202,13 +197,9 @@ export function AssembleBattery() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={!selectedModel || !canAssemble || isSubmitting}>
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Wrench className="mr-2 h-4 w-4" />
-              )}
-              {isSubmitting ? "Assembling..." : "Assemble Battery"}
+            <Button type="submit" disabled={!selectedModel || !canAssemble}>
+              <Wrench className="mr-2 h-4 w-4" />
+              Assemble Battery
             </Button>
           </CardFooter>
         </form>

@@ -45,7 +45,6 @@ const formSchema = z.object({
 export function AssembleVehicle() {
   const { vehicleModels, assembleVehicle, getItemByStdCode, assembledVehicles } = useInventory();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -74,7 +73,6 @@ export function AssembleVehicle() {
   const canAssemble = partsAvailability.every(p => p.sufficient);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Check for duplicate chassis number
     if (assembledVehicles.some(v => v.chassisNumber === values.chassisNumber)) {
       form.setError("chassisNumber", {
         type: "manual",
@@ -83,7 +81,6 @@ export function AssembleVehicle() {
       return;
     }
 
-    // Check for duplicate motor number
     if (assembledVehicles.some(v => v.motorNumber === values.motorNumber)) {
       form.setError("motorNumber", {
         type: "manual",
@@ -92,7 +89,6 @@ export function AssembleVehicle() {
       return;
     }
 
-    setIsSubmitting(true);
     const { id: toastId } = toast({
       title: `Assembling ${selectedModel?.name || 'Vehicle'}...`,
       description: `Chassis: ${values.chassisNumber}. Please wait.`,
@@ -114,8 +110,6 @@ export function AssembleVehicle() {
         title: "Assembly Failed",
         description: error.message,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -221,13 +215,9 @@ export function AssembleVehicle() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={!selectedModel || !canAssemble || isSubmitting}>
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Wrench className="mr-2 h-4 w-4" />
-              )}
-              {isSubmitting ? "Assembling..." : "Assemble Vehicle"}
+            <Button type="submit" disabled={!selectedModel || !canAssemble}>
+              <Wrench className="mr-2 h-4 w-4" />
+              Assemble Vehicle
             </Button>
           </CardFooter>
         </form>
