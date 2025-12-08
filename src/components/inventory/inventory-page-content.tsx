@@ -72,15 +72,15 @@ export function InventoryPageContent() {
             return;
           }
 
-          const purchaseDate = row['Purchase Date'] || row['purchaseDate'];
-          const date = purchaseDate ? new Date(purchaseDate) : new Date();
+          const purchaseDateValue = row['Purchase Date'] || row['purchaseDate'];
+          const purchaseDate = purchaseDateValue ? new Date(purchaseDateValue) : new Date();
 
           const itemData: Omit<InventoryItem, 'id' | 'itemStatus'> = {
             purchaseInvoiceNumber: String(
               row['Purchase Invoice Number'] || row['purchaseInvoiceNumber'] || ''
             ),
             vendorName: String(row['Vendor Name'] || row['vendorName'] || ''),
-            purchaseDate: date,
+            purchaseDate: purchaseDate,
             itemStdCode: String(itemStdCode),
             itemCategory: itemCategory,
             productName: String(row['Product Name'] || row['productName'] || ''),
