@@ -94,8 +94,8 @@ export function AssembleVehicle() {
 
     setIsSubmitting(true);
     const { id: toastId } = toast({
-      title: "Assembling Vehicle...",
-      description: "Please wait while we update your inventory.",
+      title: `Assembling ${selectedModel?.name || 'Vehicle'}...`,
+      description: `Chassis: ${values.chassisNumber}. Please wait.`,
     });
 
     try {
@@ -103,8 +103,8 @@ export function AssembleVehicle() {
       toast({
         id: toastId,
         variant: "default",
-        title: "Vehicle Assembled!",
-        description: `A new ${selectedModel?.name} has been built. Inventory updated.`,
+        title: `Vehicle Assembled: ${selectedModel?.name}`,
+        description: `The vehicle with chassis number ${values.chassisNumber} has been successfully assembled.`,
       });
       form.reset({ modelId: values.modelId, chassisNumber: "", motorNumber: ""});
     } catch (error: any) {
