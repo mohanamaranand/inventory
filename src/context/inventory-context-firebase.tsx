@@ -179,7 +179,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const dataToSave = {
       ...item,
       purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
-      salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
+      salesDate: item.salesDate ? (item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : item.salesDate) : null,
       productDetails: item.productDetails || '',
       purchasePrice: item.purchasePrice || 0,
       salesInvoiceNumber: item.salesInvoiceNumber || '',
@@ -188,7 +188,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
     await setDoc(docRef, dataToSave as any);
   }, [db]);
-
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
@@ -207,7 +206,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     await batch.commit();
   }, [db]);
   
-  
   const updateItem = async (
     id: string,
     updatedItem: Partial<Omit<InventoryItem, 'id'>>
@@ -222,11 +220,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const dataToSave = {
         ...updatedItemData,
         purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
-        salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : null,
+        salesDate: updatedItemData.salesDate ? (updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : updatedItemData.salesDate) : null,
     };
     await updateDoc(docRef, dataToSave as any);
   }, [db]);
-
 
 const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string, salesDate?: Date }) => {
     if (!db) return;
@@ -285,14 +282,8 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             if (!batterySnapshot.empty) {
                 await deleteAssembledBattery(batterySnapshot.docs[0].id, restock);
             }
-        } else if (SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
-            // This is a sold part. If restocking, we need to find the model it came from if it was part of a vehicle sale.
-            // This part of the logic is complex and might need more business rules.
-            // For now, we will just delete the record. If `restock` is true, a more advanced implementation would be needed.
-            await deleteDoc(doc(db, 'inventory', id));
-        }
-        else {
-            await deleteDoc(doc(db, 'inventory', id));
+        } else {
+             await deleteDoc(doc(db, 'inventory', id));
         }
     };
   
@@ -310,7 +301,6 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
     
     await deleteFirebaseAuthUser(currentUser);
   }, [auth, db]);
-
 
   const getItem = useCallback((id: string) => {
       const item = inventory.find((item) => item.id === id);
@@ -335,38 +325,35 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   }, []);
 
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
+    if (!db) return;
     await runTransaction(db, async (transaction) => {
-        const vehicleRef = doc(db, 'assembledVehicles', id);
-        const vehicleDoc = await transaction.get(vehicleRef);
-        if (!vehicleDoc.exists()) throw new Error("Assembled vehicle not found");
-        
-        const vehicle = vehicleDoc.data() as AssembledVehicle;
-        const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
-        const inventorySnapshot = await transaction.get(inventoryItemQuery);
-        
-        if (restock) {
-            const model = getVehicleModel(vehicle.modelId);
-            if (model?.parts) {
-                 for (const part of model.parts) {
-                    const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
-                    const itemSnapshot = await transaction.get(itemQuery);
-                    if (!itemSnapshot.empty) {
-                        const itemDoc = itemSnapshot.docs[0];
-                        const itemData = itemDoc.data() as InventoryItem;
-                        transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
-                    } else {
-                        // This part is complex: what if the part item doesn't exist anymore?
-                        // We would need a master list of all possible parts to recreate it.
-                        // For now, we'll skip restocking non-existent items.
-                    }
-                }
+      const vehicleRef = doc(db, 'assembledVehicles', id);
+      const vehicleDoc = await transaction.get(vehicleRef);
+      if (!vehicleDoc.exists()) throw new Error("Assembled vehicle not found");
+      
+      const vehicle = vehicleDoc.data() as AssembledVehicle;
+      const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
+      const inventorySnapshot = await transaction.get(inventoryItemQuery);
+      
+      if (restock) {
+        const model = getVehicleModel(vehicle.modelId);
+        if (model?.parts) {
+          for (const part of model.parts) {
+            const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+            const itemSnapshot = await transaction.get(itemQuery);
+            if (!itemSnapshot.empty) {
+              const itemDoc = itemSnapshot.docs[0];
+              const itemData = itemDoc.data() as InventoryItem;
+              transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
             }
+          }
         }
-
-        if (!inventorySnapshot.empty) {
-            transaction.delete(inventorySnapshot.docs[0].ref);
-        }
-        transaction.delete(vehicleRef);
+      }
+  
+      if (!inventorySnapshot.empty) {
+        transaction.delete(inventorySnapshot.docs[0].ref);
+      }
+      transaction.delete(vehicleRef);
     });
   };
 
@@ -383,38 +370,40 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   }, []);
 
   const deleteAssembledBattery = async (id: string, restock: boolean = false) => {
+    if (!db) return;
     await runTransaction(db, async (transaction) => {
-        const batteryRef = doc(db, 'assembledBatteries', id);
-        const batteryDoc = await transaction.get(batteryRef);
-        if (!batteryDoc.exists()) throw new Error("Assembled battery not found");
-
-        const battery = batteryDoc.data() as AssembledBattery;
-
-        const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
-        const inventorySnapshot = await transaction.get(inventoryItemQuery);
-
-        if (restock) {
-            const model = getBatteryModel(battery.modelId);
-            if (model?.parts) {
-                for (const part of model.parts) {
-                    const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
-                    const itemSnapshot = await transaction.get(itemQuery);
-                    if (!itemSnapshot.empty) {
-                        const itemDoc = itemSnapshot.docs[0];
-                        const itemData = itemDoc.data() as InventoryItem;
-                        transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
-                    }
-                }
+      const batteryRef = doc(db, 'assembledBatteries', id);
+      const batteryDoc = await transaction.get(batteryRef);
+      if (!batteryDoc.exists()) throw new Error("Assembled battery not found");
+  
+      const battery = batteryDoc.data() as AssembledBattery;
+      const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
+      const inventorySnapshot = await transaction.get(inventoryItemQuery);
+  
+      if (restock) {
+        const model = getBatteryModel(battery.modelId);
+        if (model?.parts) {
+          for (const part of model.parts) {
+            const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+            const itemSnapshot = await transaction.get(itemQuery);
+            if (!itemSnapshot.empty) {
+              const itemDoc = itemSnapshot.docs[0];
+              const itemData = itemDoc.data() as InventoryItem;
+              transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
             }
+          }
         }
-        if (!inventorySnapshot.empty) {
-            transaction.delete(inventorySnapshot.docs[0].ref);
-        }
-        transaction.delete(batteryRef);
+      }
+  
+      if (!inventorySnapshot.empty) {
+        transaction.delete(inventorySnapshot.docs[0].ref);
+      }
+      transaction.delete(batteryRef);
     });
   };
   
   const addCustomer = async (customer: Omit<Customer, 'id'>, id?: string) => {
+    if (!db) return;
     if (id) {
         await updateDoc(doc(db, 'customers', id), customer);
     } else {
@@ -422,6 +411,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
     }
   };
    const addBatchCustomers = useCallback(async (customers: Omit<Customer, 'id'>[]) => {
+      if (!db) return;
       const batch = writeBatch(db);
       customers.forEach(customer => {
         const docRef = doc(getCollectionRef('customers'));
@@ -430,14 +420,17 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
       await batch.commit();
   }, [db]);
   const updateCustomer = async (id: string, updatedCustomer: Partial<Customer>) => {
+      if (!db) return;
       await updateDoc(doc(db, 'customers', id), updatedCustomer);
   };
   const deleteCustomer = async (id: string) => {
+      if (!db) return;
       await deleteDoc(doc(db, 'customers', id));
   };
   const getCustomer = useCallback((id: string) => customers.find(c => c.id === id), [customers]);
 
   const processSale = async (saleData: SaleData) => {
+      if (!db) return;
       await runTransaction(db, async (transaction) => {
           for (const saleItem of saleData.items) {
               const itemRef = doc(db, 'inventory', saleItem.itemId);
@@ -477,6 +470,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   };
 
   const clearAllData = async () => {
+    if (!db) return;
     const collections = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
     for (const coll of collections) {
         const collRef = getCollectionRef(coll);
@@ -489,6 +483,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
   };
 
   const restoreAllData = async (data: Partial<AllData>) => {
+    if (!db) return;
     await clearAllData();
     
     if (data.inventory) {
@@ -528,7 +523,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
 
   // Effect to process the assembly queue
   useEffect(() => {
-    if (assemblyQueue.length === 0 || isProcessingAssembly) {
+    if (assemblyQueue.length === 0 || isProcessingAssembly || !db) {
       return;
     }
 
@@ -567,10 +562,11 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
                 }
             }
         
+            const assemblyTimestamp = Timestamp.now();
             const assembledVehicleRef = doc(collection(db, 'assembledVehicles'));
             transaction.set(assembledVehicleRef, {
               ...vehicleData,
-              assemblyDate: serverTimestamp(),
+              assemblyDate: assemblyTimestamp,
             });
         
             const totalCost = model.parts.reduce((sum, part) => {
@@ -589,7 +585,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
                 purchaseInvoiceNumber: 'ASSEMBLY',
                 vendorName: 'In-House',
                 storageLocation: 'Finished Goods',
-                purchaseDate: serverTimestamp() as Timestamp,
+                purchaseDate: assemblyTimestamp,
                 imageUrl: '',
                 purchasePrice: 0,
             };
@@ -627,10 +623,11 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
                     }
                 }
           
+                const assemblyTimestamp = Timestamp.now();
                 const assembledBatteryRef = doc(collection(db, 'assembledBatteries'));
                 transaction.set(assembledBatteryRef, {
                     ...batteryData,
-                    assemblyDate: serverTimestamp(),
+                    assemblyDate: assemblyTimestamp,
                 });
           
                 const totalCost = model.parts.reduce((sum, part) => {
@@ -649,7 +646,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
                   purchaseInvoiceNumber: 'ASSEMBLY',
                   vendorName: 'In-House',
                   storageLocation: 'Finished Goods',
-                  purchaseDate: serverTimestamp() as Timestamp,
+                  purchaseDate: assemblyTimestamp,
                   imageUrl: '',
                   purchasePrice: 0,
               };
@@ -659,7 +656,6 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         }
       } catch (error) {
         console.error("Failed to process assembly request:", error);
-        // Optionally, re-add the request to the queue to retry, or notify the user.
       } finally {
         setAssemblyQueue((prev) => prev.slice(1));
         setIsProcessingAssembly(false);
@@ -743,7 +739,9 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
       processSale, 
       clearAllData, 
       restoreAllData,
-      deleteCurrentUser
+      deleteCurrentUser,
+      assembleVehicle,
+      assembleBattery,
     ]
   );
 
@@ -761,3 +759,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
