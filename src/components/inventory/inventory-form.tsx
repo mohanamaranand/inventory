@@ -202,12 +202,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             toast({ title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
             const { splitQuantity, ...updateData } = submissionValues;
-            const updatedItemData = { 
-              ...updateData, 
-              purchaseDate: Timestamp.fromDate(submissionValues.purchaseDate),
-              salesDate: submissionValues.salesDate ? Timestamp.fromDate(submissionValues.salesDate) : undefined,
-            };
-            await editAndMergeItem(itemId, updatedItemData as Omit<InventoryItem, 'id'>);
+            await editAndMergeItem(itemId, updateData as Omit<InventoryItem, 'id'>);
             toast({ title: "Item Updated", description: `"${submissionValues.productName}" has been updated and combined with any matching items.` });
         } else {
             const { splitQuantity, ...addData } = submissionValues;
@@ -219,12 +214,12 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             toast({ title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
         }
         onFormSubmit();
-    } catch (error) {
+    } catch (error: any) {
         console.error("Form submission error:", error);
         toast({
             variant: "destructive",
             title: "Operation Failed",
-            description: "An error occurred while saving the item."
+            description: error.message || "An error occurred while saving the item."
         })
     }
   }
@@ -572,3 +567,5 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     </Sheet>
   );
 }
+
+    
