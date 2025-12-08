@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/card";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Wrench, CheckCircle, AlertTriangle } from "lucide-react";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -42,7 +42,7 @@ const formSchema = z.object({
 });
 
 export function AssembleBattery() {
-  const { batteryModels, assembleBattery, getItemByStdCode, assembledBatteries } = useInventory();
+  const { inventory, batteryModels, assembleBattery, getItemByStdCode, assembledBatteries } = useInventory();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,7 +71,7 @@ export function AssembleBattery() {
         sufficient: available >= part.quantity,
       };
     });
-  }, [selectedModel, getItemByStdCode]);
+  }, [selectedModel, getItemByStdCode, inventory]);
   
   const canAssemble = partsAvailability.every(p => p.sufficient);
 
