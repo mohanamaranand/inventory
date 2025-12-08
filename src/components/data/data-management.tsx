@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Upload, Trash2 } from "lucide-react";
-import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel, AllData } from "@/lib/types";
+import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, AllData } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
 
 export function DataManagement() {
