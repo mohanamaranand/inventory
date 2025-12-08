@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, {
@@ -23,7 +24,7 @@ import {
   getDoc,
   addDoc,
 } from 'firebase/firestore';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore, useCollection } from '@/firebase';
 import { deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 
 import type {
@@ -69,7 +70,13 @@ interface SaleData {
   }[];
 }
 
-interface InventoryContextType extends Omit<AllData, 'backups'> {
+interface InventoryContextType {
+  inventory: InventoryItem[];
+  vehicleModels: VehicleModel[];
+  assembledVehicles: AssembledVehicle[];
+  batteryModels: BatteryModel[];
+  assembledBatteries: AssembledBattery[];
+  customers: Customer[];
   backups: Backup[];
   loading: boolean;
   pendingChanges: PendingChange[];
@@ -211,39 +218,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         backups: new Map(serverBackups?.map(item => [item.id, item])),
       });
     }
-  }, [loading, serverInventory, serverVehicleModels, serverAssembledVehicles, serverBatteryModels, serverAssembledBatteries, serverCustomers, serverBackups]);
+  }, [loading, serverInventory, serverVehicleModels, serverAssembledVehicles, serverBatteryModels, serverAssembledBatteries, serverCustomers, serverBackups, pendingChanges.length]);
 
-  
-  const addChange = (change: PendingChange) => {
-    setPendingChanges(prev => [...prev, change]);
-  };
-  
   const syncChanges = useCallback(async () => {
     if (!db || isSyncing || pendingChanges.length === 0) return;
     setIsSyncing(true);
-    
-    // Grab the current state of the data collections for the backup
-    const currentDataState: AllData = {
-        inventory: Array.from(cache.inventory.values()),
-        vehicleModels: Array.from(cache.vehicleModels.values()),
-        assembledVehicles: Array.from(cache.assembledVehicles.values()),
-        batteryModels: Array.from(cache.batteryModels.values()),
-        assembledBatteries: Array.from(cache.assembledBatteries.values()),
-        customers: Array.from(cache.customers.values()),
-        backups: Array.from(cache.backups.values()),
-    };
+
+    const changesToSync = [...pendingChanges];
     
     // Create backup before applying changes
-    const backupId = uuidv4();
-    const backupRef = doc(db, "backups", backupId);
-    await setDoc(backupRef, {
-        id: backupId,
-        createdAt: serverTimestamp(),
-        data: convertDatesToTimestamps(currentDataState),
-    });
+    try {
+        const currentDataState: AllData = {
+            inventory: Array.from(cache.inventory.values()),
+            vehicleModels: Array.from(cache.vehicleModels.values()),
+            assembledVehicles: Array.from(cache.assembledVehicles.values()),
+            batteryModels: Array.from(cache.batteryModels.values()),
+            assembledBatteries: Array.from(cache.assembledBatteries.values()),
+            customers: Array.from(cache.customers.values()),
+        };
+        const backupId = uuidv4();
+        const backupRef = doc(db, "backups", backupId);
+        await setDoc(backupRef, {
+            id: backupId,
+            createdAt: serverTimestamp(),
+            data: convertDatesToTimestamps(currentDataState),
+        });
+    } catch (error) {
+        console.error("Backup creation failed:", error);
+        // Decide if you want to stop the sync if backup fails
+    }
     
     const batch = writeBatch(db);
-    const changesToSync = [...pendingChanges];
 
     changesToSync.forEach(change => {
         const { type, collection: collectionName, id, payload } = change;
@@ -287,35 +292,35 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }), [cache.backups]);
 
 
-  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
+  const addBatchItems = useCallback((items: Omit<InventoryItem, 'id' | 'itemStatus'>[]): PendingChange[] => {
+    const changesToAdd: PendingChange[] = [];
     setCache(prevCache => {
-      const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
-      const changesToAdd: PendingChange[] = [];
+        const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
 
-      items.forEach(item => {
-        const match = Array.from(newCache.inventory.values()).find(
-            (existing) => existing.itemStdCode === item.itemStdCode && existing.itemStatus === 'In Stock'
-        );
+        items.forEach(item => {
+            const match = Array.from(newCache.inventory.values()).find(
+                (existing) => existing.itemStdCode === item.itemStdCode && existing.itemStatus === 'In Stock'
+            );
 
-        if (match) {
-            const updatedItem = { ...match, quantity: match.quantity + item.quantity };
-            newCache.inventory.set(match.id, updatedItem);
-            changesToAdd.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
-        } else {
-            const id = uuidv4();
-            const newItem = { ...item, id, itemStatus: 'In Stock' as const };
-            newCache.inventory.set(id, newItem);
-            changesToAdd.push({ type: 'create', collection: 'inventory', id, payload: newItem });
-        }
-      });
-      
-      setPendingChanges(prev => [...prev, ...changesToAdd]);
-      return newCache;
+            if (match) {
+                const updatedItem = { ...match, quantity: match.quantity + item.quantity };
+                newCache.inventory.set(match.id, updatedItem);
+                changesToAdd.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
+            } else {
+                const id = uuidv4();
+                const newItem = { ...item, id, itemStatus: 'In Stock' as const };
+                newCache.inventory.set(id, newItem);
+                changesToAdd.push({ type: 'create', collection: 'inventory', id, payload: newItem });
+            }
+        });
+        return newCache;
     });
+    return changesToAdd;
   }, []);
 
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    await addBatchItems([item]);
+    const newChanges = addBatchItems([item]);
+    setPendingChanges(prev => [...prev, ...newChanges]);
   }, [addBatchItems]);
 
   const updateItem = useCallback(async (id: string, updatedItem: Partial<Omit<InventoryItem, 'id'>>) => {
@@ -324,24 +329,22 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       const currentItem = newCache.inventory.get(id);
       if (currentItem) {
         newCache.inventory.set(id, { ...currentItem, ...updatedItem });
-        addChange({ type: 'update', collection: 'inventory', id, payload: updatedItem });
+        setPendingChanges(prev => [...prev, { type: 'update', collection: 'inventory', id, payload: updatedItem }]);
       }
       return newCache;
     });
   }, []);
 
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
+    const newChanges: PendingChange[] = [];
     setCache(prevCache => {
       const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
-      const newChanges: PendingChange[] = [];
   
-      // First, find the item being edited and remove it from the cache.
       if (newCache.inventory.has(id)) {
         newCache.inventory.delete(id);
         newChanges.push({ type: 'delete', collection: 'inventory', id });
       }
   
-      // Now, find if a matching item exists to merge into.
       const match = Array.from(newCache.inventory.values()).find(
         (existing) => existing.itemStdCode === updatedItemData.itemStdCode && existing.itemStatus === updatedItemData.itemStatus
       );
@@ -351,16 +354,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         newCache.inventory.set(match.id, mergedItem);
         newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: mergedItem.quantity } });
       } else {
-        // If no match, create a new item with a new ID.
         const newId = uuidv4();
         const newItem = { ...updatedItemData, id: newId };
         newCache.inventory.set(newId, newItem);
         newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
       }
-  
-      setPendingChanges(prev => [...prev, ...newChanges]);
       return newCache;
     });
+    setPendingChanges(prev => [...prev, ...newChanges]);
   }, []);
   
 
@@ -409,16 +410,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
       const newChanges: PendingChange[] = [];
   
-      // Always add the delete operation for the original item.
       newChanges.push({ type: 'delete', collection: 'inventory', id });
-      newCache.inventory.delete(id); // Immediately remove from local cache.
+      newCache.inventory.delete(id);
   
-      // Handle the restock logic if applicable.
       if (restock && SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
         const { id: originalId, itemStatus, salesDate, salesInvoiceNumber, customerId, ...restoredData } = itemToDelete;
         const restoredItemData = { ...restoredData, itemStatus: 'In Stock' as const, quantity: itemToDelete.quantity };
         
-        // Find if there's an existing item to merge with.
         const match = Array.from(newCache.inventory.values()).find(
           (existing) => existing.itemStdCode === restoredItemData.itemStdCode && existing.itemStatus === 'In Stock'
         );
@@ -428,14 +426,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           newCache.inventory.set(match.id, updatedItem);
           newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
         } else {
-          // If no match, create a new item.
           const newId = uuidv4();
           const newItem = { ...restoredItemData, id: newId };
           newCache.inventory.set(newId, newItem);
           newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
         }
       }
-  
+      
       setPendingChanges(prev => [...prev, ...newChanges]);
       return newCache;
     });
@@ -445,14 +442,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteMultipleItems = useCallback(async (ids: string[], restock: boolean = false) => {
     setCache(prevCache => {
       const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
-      const changesToAdd: PendingChange[] = [];
+      const newChanges: PendingChange[] = [];
   
       ids.forEach(id => {
         const itemToDelete = newCache.inventory.get(id);
-        if (!itemToDelete) return; // Skip if item not found
+        if (!itemToDelete) return;
   
-        // Add the delete operation for the current item
-        changesToAdd.push({ type: 'delete', collection: 'inventory', id });
+        newChanges.push({ type: 'delete', collection: 'inventory', id });
         newCache.inventory.delete(id);
   
         if (restock && SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
@@ -466,17 +462,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           if (match) {
             const updatedItem = { ...match, quantity: match.quantity + restoredItemData.quantity };
             newCache.inventory.set(match.id, updatedItem);
-            changesToAdd.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
+            newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
           } else {
             const newId = uuidv4();
             const newItem = { ...restoredItemData, id: newId };
             newCache.inventory.set(newId, newItem);
-            changesToAdd.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
+            newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
           }
         }
       });
   
-      setPendingChanges(prev => [...prev, ...changesToAdd]);
+      setPendingChanges(prev => [...prev, ...newChanges]);
       return newCache;
     });
   }, []);
@@ -486,7 +482,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteCurrentUser = useCallback(async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("No user is currently signed in.");
-    addChange({ type: 'delete', collection: 'users', id: currentUser.uid });
+    setPendingChanges(prev => [...prev, { type: 'delete', collection: 'users', id: currentUser.uid }]);
     await syncChanges();
     await deleteFirebaseAuthUser(currentUser);
   }, [auth, syncChanges]);
@@ -498,7 +494,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const id = uuidv4();
     const newModel = { ...model, id };
     setCache(prev => ({ ...prev, vehicleModels: new Map(prev.vehicleModels).set(id, newModel) }));
-    addChange({ type: 'create', collection: 'vehicleModels', id, payload: newModel });
+    setPendingChanges(prev => [...prev, { type: 'create', collection: 'vehicleModels', id, payload: newModel }]);
   }, []);
 
   const updateVehicleModel = useCallback(async (id: string, updatedModel: Partial<VehicleModel>) => {
@@ -507,7 +503,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const current = newCache.vehicleModels.get(id);
         if (current) {
             newCache.vehicleModels.set(id, { ...current, ...updatedModel });
-            addChange({ type: 'update', collection: 'vehicleModels', id, payload: updatedModel });
+            setPendingChanges(prevChanges => [...prevChanges, { type: 'update', collection: 'vehicleModels', id, payload: updatedModel }]);
         }
         return newCache;
     });
@@ -548,7 +544,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         
         // Create inventory item for the assembled vehicle
         const totalCost = model.parts.reduce((sum, part) => {
-            // Important: Use original cache state for accurate cost calculation before deductions
             const item = prevCache.inventory.get(Array.from(prevCache.inventory.values()).find(i => i.itemStdCode === part.itemStdCode && i.itemStatus === 'In Stock')?.id || '');
             return sum + (item ? item.unitPrice * part.quantity : 0);
         }, 0);
@@ -618,7 +613,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const id = uuidv4();
     const newModel = { ...model, id };
     setCache(prev => ({ ...prev, batteryModels: new Map(prev.batteryModels).set(id, newModel) }));
-    addChange({ type: 'create', collection: 'batteryModels', id, payload: newModel });
+    setPendingChanges(prev => [...prev, { type: 'create', collection: 'batteryModels', id, payload: newModel }]);
   }, []);
 
   const updateBatteryModel = useCallback(async (id: string, updatedModel: Partial<BatteryModel>) => {
@@ -627,7 +622,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const current = newCache.batteryModels.get(id);
         if (current) {
             newCache.batteryModels.set(id, { ...current, ...updatedModel });
-            addChange({ type: 'update', collection: 'batteryModels', id, payload: updatedModel });
+            setPendingChanges(prevChanges => [...prevChanges, { type: 'update', collection: 'batteryModels', id, payload: updatedModel }]);
         }
         return newCache;
     });
@@ -739,7 +734,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const newId = id || uuidv4();
         const newCustomer = { ...customer, id: newId };
         newCache.customers.set(newId, newCustomer);
-        addChange({ type: 'create', collection: 'customers', id: newId, payload: newCustomer });
+        setPendingChanges(prevChanges => [...prevChanges, { type: 'create', collection: 'customers', id: newId, payload: newCustomer }]);
         return newCache;
     });
   }, []);
@@ -765,7 +760,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const current = newCache.customers.get(id);
         if (current) {
             newCache.customers.set(id, { ...current, ...updatedCustomer });
-            addChange({ type: 'update', collection: 'customers', id, payload: updatedCustomer });
+            setPendingChanges(prevChanges => [...prevChanges, { type: 'update', collection: 'customers', id, payload: updatedCustomer }]);
         }
         return newCache;
      });
@@ -776,7 +771,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const newCache = { ...prev, customers: new Map(prev.customers) };
         if (newCache.customers.has(id)) {
             newCache.customers.delete(id);
-            addChange({ type: 'delete', collection: 'customers', id });
+            setPendingChanges(prevChanges => [...prevChanges, { type: 'delete', collection: 'customers', id }]);
         }
         return newCache;
     });
@@ -832,19 +827,15 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setCache(prevCache => {
         const newChanges: PendingChange[] = [];
         
-        const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
+        const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers', 'backups'];
         
         collections.forEach(coll => {
-            prevCache[coll].forEach((_, id) => {
-                newChanges.push({ type: 'delete', collection: coll, id });
-            });
+            if (prevCache[coll]) {
+                prevCache[coll].forEach((_, id) => {
+                    newChanges.push({ type: 'delete', collection: coll, id });
+                });
+            }
         });
-
-        if (prevCache.backups) {
-            prevCache.backups.forEach((_, id) => {
-                newChanges.push({ type: 'delete', collection: 'backups', id });
-            })
-        }
 
         setPendingChanges(prev => [...prev, ...newChanges]);
 
@@ -879,12 +870,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         collectionName: keyof AllData,
         cacheName: keyof LocalCache
       ) => {
-        const items = data[collectionName] as T[] | undefined;
+        const items = data[collectionName as keyof AllData] as T[] | undefined;
         if (items) {
           items.forEach(item => {
             const id = item.id || uuidv4();
             const newItem = { ...item, id };
-            (newCache as any)[cacheName].set(id, newItem);
+            (newCache[cacheName] as Map<string, T>).set(id, newItem);
             newChanges.push({ type: 'create', collection: cacheName as string, id, payload: newItem });
           });
         }
@@ -910,7 +901,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         console.error("Backup not found");
         return;
     }
-    const backupData = backupDoc.data()?.data as AllData;
+    const backupData = backupDoc.data()?.data as AllData | undefined;
     if (!backupData) {
         console.error("Backup data is empty or invalid");
         return;
@@ -923,7 +914,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const newCache = { ...prev, backups: new Map(prev.backups) };
         if (newCache.backups.has(backupId)) {
           newCache.backups.delete(backupId);
-          addChange({ type: 'delete', collection: 'backups', id: backupId });
+          setPendingChanges(prevChanges => [...prevChanges, { type: 'delete', collection: 'backups', id: backupId }]);
         }
         return newCache;
       });
