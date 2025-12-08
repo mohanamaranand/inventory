@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Download, Upload, Trash2 } from "lucide-react";
 import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, VehicleModel, AllData } from "@/lib/types";
+import { Timestamp } from "firebase/firestore";
 
 export function DataManagement() {
   const {
@@ -42,13 +43,22 @@ export function DataManagement() {
   const [isRestoreAlertOpen, setRestoreAlertOpen] = useState(false);
   const [backupFile, setBackupFile] = useState<File | null>(null);
 
+  const toDateOrString = (date: any) => {
+    if (date instanceof Timestamp) return date.toDate();
+    if (date instanceof Date) return date;
+    return date;
+  }
 
   const handleDownload = () => {
-    const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({...item, date: item.purchaseDate})));
+    const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
+        ...item,
+        purchaseDate: toDateOrString(item.purchaseDate),
+        salesDate: item.salesDate ? toDateOrString(item.salesDate) : undefined,
+    })));
     const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels.map(vm => ({ ...vm, parts: JSON.stringify(vm.parts) })));
-    const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({...v, assemblyDate: v.assemblyDate})));
+    const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({...v, assemblyDate: toDateOrString(v.assemblyDate)})));
     const batteryModelsSheet = XLSX.utils.json_to_sheet(batteryModels.map(bm => ({...bm, parts: JSON.stringify(bm.parts) })));
-    const assembledBatteriesSheet = XLSX.utils.json_to_sheet(assembledBatteries.map(b => ({...b, assemblyDate: b.assemblyDate})));
+    const assembledBatteriesSheet = XLSX.utils.json_to_sheet(assembledBatteries.map(b => ({...b, assemblyDate: toDateOrString(b.assemblyDate)})));
     const customersSheet = XLSX.utils.json_to_sheet(customers);
 
 
@@ -82,26 +92,19 @@ export function DataManagement() {
     if (!backupFile) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array", cellDates: true });
 
-        const inventorySheet = workbook.Sheets["Inventory"];
-        const vehicleModelsSheet = workbook.Sheets["Vehicle Models"];
-        const assembledVehiclesSheet = workbook.Sheets["Assembled Vehicles"];
-        const batteryModelsSheet = workbook.Sheets["Battery Models"];
-        const assembledBatteriesSheet = workbook.Sheets["Assembled Batteries"];
-        const customersSheet = workbook.Sheets["Customers"];
+        const restoredInventory: InventoryItem[] = workbook.Sheets["Inventory"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Inventory"]) : [];
+        const restoredVehicleModels: VehicleModel[] = workbook.Sheets["Vehicle Models"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Vehicle Models"]) : [];
+        const restoredAssembledVehicles: AssembledVehicle[] = workbook.Sheets["Assembled Vehicles"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Assembled Vehicles"]) : [];
+        const restoredBatteryModels: BatteryModel[] = workbook.Sheets["Battery Models"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Battery Models"]) : [];
+        const restoredAssembledBatteries: AssembledBattery[] = workbook.Sheets["Assembled Batteries"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Assembled Batteries"]) : [];
+        const restoredCustomers: Customer[] = workbook.Sheets["Customers"] ? XLSX.utils.sheet_to_json(workbook.Sheets["Customers"]) : [];
 
-        const restoredInventory: InventoryItem[] = inventorySheet ? XLSX.utils.sheet_to_json(inventorySheet) : [];
-        const restoredVehicleModels: VehicleModel[] = vehicleModelsSheet ? XLSX.utils.sheet_to_json(vehicleModelsSheet) : [];
-        const restoredAssembledVehicles: AssembledVehicle[] = assembledVehiclesSheet ? XLSX.utils.sheet_to_json(assembledVehiclesSheet) : [];
-        const restoredBatteryModels: BatteryModel[] = batteryModelsSheet ? XLSX.utils.sheet_to_json(batteryModelsSheet) : [];
-        const restoredAssembledBatteries: AssembledBattery[] = assembledBatteriesSheet ? XLSX.utils.sheet_to_json(assembledBatteriesSheet) : [];
-        const restoredCustomers: Customer[] = customersSheet ? XLSX.utils.sheet_to_json(customersSheet) : [];
-
-        restoreAllData({
+        await restoreAllData({
             inventory: restoredInventory,
             vehicleModels: restoredVehicleModels.map(vm => ({ ...vm, parts: typeof vm.parts === 'string' ? JSON.parse(vm.parts) : vm.parts })),
             assembledVehicles: restoredAssembledVehicles,
@@ -125,6 +128,9 @@ export function DataManagement() {
       } finally {
         setBackupFile(null);
         setRestoreAlertOpen(false);
+        if(document.getElementById('restore-input')){
+            (document.getElementById('restore-input') as HTMLInputElement).value = "";
+        }
       }
     };
     reader.readAsArrayBuffer(backupFile);

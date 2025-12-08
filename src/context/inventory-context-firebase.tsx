@@ -27,6 +27,7 @@ import {
   limit,
   DocumentReference,
   DocumentData,
+  getDoc,
 } from 'firebase/firestore';
 import { useAuth, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
@@ -180,16 +181,37 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) return;
   
     // Sanitize payload to prevent 'undefined' values which Firestore rejects.
-    const sanitizedPayload = {
-      ...itemPayload,
-      productDetails: itemPayload.productDetails ?? '',
-      purchasePrice: itemPayload.purchasePrice ?? 0,
-      salesInvoiceNumber: itemPayload.salesInvoiceNumber ?? '',
-      customerId: itemPayload.customerId ?? '',
-      salesDate: itemPayload.salesDate ? (itemPayload.salesDate instanceof Timestamp ? itemPayload.salesDate : Timestamp.fromDate(itemPayload.salesDate)) : null,
-      purchaseDate: itemPayload.purchaseDate instanceof Timestamp ? itemPayload.purchaseDate : Timestamp.fromDate(itemPayload.purchaseDate)
+    const sanitizedPayload: Omit<InventoryItem, 'id'> = {
+        itemStdCode: itemPayload.itemStdCode || '',
+        productName: itemPayload.productName || '',
+        itemCategory: itemPayload.itemCategory || 'Other Business Items',
+        quantity: itemPayload.quantity || 0,
+        unitPrice: itemPayload.unitPrice || 0,
+        purchasePrice: itemPayload.purchasePrice || 0,
+        storageLocation: itemPayload.storageLocation || '',
+        purchaseInvoiceNumber: itemPayload.purchaseInvoiceNumber || '',
+        vendorName: itemPayload.vendorName || '',
+        productDetails: itemPayload.productDetails || '',
+        itemStatus: itemPayload.itemStatus || 'In Stock',
+        salesInvoiceNumber: itemPayload.salesInvoiceNumber || '',
+        customerId: itemPayload.customerId || '',
+        imageUrl: itemPayload.imageUrl || '',
+        purchaseDate: itemPayload.purchaseDate instanceof Timestamp ? itemPayload.purchaseDate : Timestamp.fromDate(new Date(itemPayload.purchaseDate)),
+        salesDate: itemPayload.salesDate ? (itemPayload.salesDate instanceof Timestamp ? itemPayload.salesDate : Timestamp.fromDate(new Date(itemPayload.salesDate))) : null,
     };
     
+    // Convert dates to Timestamps for the query
+    const purchaseDateAsTimestamp = sanitizedPayload.purchaseDate instanceof Date 
+        ? Timestamp.fromDate(sanitizedPayload.purchaseDate) 
+        : sanitizedPayload.purchaseDate;
+
+    let salesDateAsTimestamp = null;
+    if (sanitizedPayload.salesDate) {
+        salesDateAsTimestamp = sanitizedPayload.salesDate instanceof Date
+            ? Timestamp.fromDate(sanitizedPayload.salesDate)
+            : sanitizedPayload.salesDate;
+    }
+
     const q = query(
       collection(db, 'inventory'),
       where('itemStdCode', '==', sanitizedPayload.itemStdCode),
@@ -198,7 +220,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       where('unitPrice', '==', sanitizedPayload.unitPrice),
       where('storageLocation', '==', sanitizedPayload.storageLocation),
       where('purchaseInvoiceNumber', '==', sanitizedPayload.purchaseInvoiceNumber),
-      where('purchaseDate', '==', sanitizedPayload.purchaseDate),
+      where('purchaseDate', '==', purchaseDateAsTimestamp),
       where('itemStatus', '==', sanitizedPayload.itemStatus),
       where('salesInvoiceNumber', '==', sanitizedPayload.salesInvoiceNumber),
       where('customerId', '==', sanitizedPayload.customerId),
@@ -276,7 +298,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         // Create the payload for the new/split item
         const { id: originalId, ...newItemData } = itemToSplit;
         
-        const newDocPayload: Omit<InventoryItem, 'id'> = {
+        let newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
             quantity: splitQuantity,
             itemStatus: newStatus,
@@ -288,9 +310,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
         // If the new status is NOT a sold status, clear sales data.
         if (!SOLD_STATUSES.includes(newStatus as any)) {
-            newDocPayload.salesInvoiceNumber = '';
-            newDocPayload.salesDate = undefined;
-            newDocPayload.customerId = '';
+            newDocPayload = {
+              ...newDocPayload,
+              salesInvoiceNumber: '',
+              salesDate: undefined,
+              customerId: '',
+            }
         }
         
         await findAndMergeItem(transaction, newDocPayload);
@@ -364,30 +389,36 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
     if (!db) return;
-  
+    
     const vehicleRef = doc(db, 'assembledVehicles', id);
-    const vehicleDoc = await getDocs(query(collection(db, 'assembledVehicles'), where('__name__', '==', id), limit(1)));
-    if (vehicleDoc.empty) throw new Error("Assembled vehicle not found.");
-    const vehicle = vehicleDoc.docs[0].data() as AssembledVehicle;
+    const vehicleSnap = await getDoc(vehicleRef);
+    if (!vehicleSnap.exists()) throw new Error("Assembled vehicle not found.");
+    const vehicle = vehicleSnap.data() as AssembledVehicle;
     
     const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
     await runTransaction(db, async (transaction) => {
-      const vehicleSnap = await transaction.get(vehicleRef);
-      if (!vehicleSnap.exists()) return;
-  
       if (restock) {
         const model = getVehicleModel(vehicle.modelId);
         if (model?.parts) {
           for (const part of model.parts) {
-             const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
-             const itemSnapshot = await getDocs(itemQuery);
+             // In a transaction, we must query first, then do writes.
+             // But since we are only updating based on a known stdCode, it's better to do this in a batch or loop outside transaction for reads.
+             // For simplicity and to avoid complex transaction rules, let's find one and update.
+             const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
+             const itemSnapshot = await getDocs(itemQuery); // This is outside transaction scope.
              if (!itemSnapshot.empty) {
                  const itemDoc = itemSnapshot.docs[0];
                  const itemData = itemDoc.data() as InventoryItem;
-                 transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
+                 // Re-read inside transaction for safety
+                 const freshItemSnap = await transaction.get(itemDoc.ref);
+                 const freshItemData = freshItemSnap.data() as InventoryItem;
+                 transaction.update(itemDoc.ref, { quantity: freshItemData.quantity + part.quantity });
+             } else {
+                 // If item doesn't exist, we can't create it without more info.
+                 console.warn(`Could not restock ${part.itemStdCode}, no existing 'In Stock' item found.`);
              }
           }
         }
@@ -417,28 +448,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     if (!db) return;
   
     const batteryRef = doc(db, 'assembledBatteries', id);
-    const batteryDoc = await getDocs(query(collection(db, 'assembledBatteries'), where('__name__', '==', id), limit(1)));
-    if (batteryDoc.empty) throw new Error("Assembled battery not found.");
-    const battery = batteryDoc.docs[0].data() as AssembledBattery;
+    const batterySnap = await getDoc(batteryRef);
+    if (!batterySnap.exists()) throw new Error("Assembled battery not found.");
+    const battery = batterySnap.data() as AssembledBattery;
   
     const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
     await runTransaction(db, async (transaction) => {
-      const batterySnap = await transaction.get(batteryRef);
-      if (!batterySnap.exists()) return;
-  
       if (restock) {
         const model = getBatteryModel(battery.modelId);
         if (model?.parts) {
           for (const part of model.parts) {
-            const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+            const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), where('itemStatus', '==', 'In Stock'), limit(1));
             const itemSnapshot = await getDocs(itemQuery);
             if (!itemSnapshot.empty) {
               const itemDoc = itemSnapshot.docs[0];
-              const itemData = itemDoc.data() as InventoryItem;
-              transaction.update(itemDoc.ref, { quantity: itemData.quantity + part.quantity });
+              const freshItemSnap = await transaction.get(itemDoc.ref);
+              const freshItemData = freshItemSnap.data() as InventoryItem;
+              transaction.update(itemDoc.ref, { quantity: freshItemData.quantity + part.quantity });
             }
           }
         }
@@ -534,37 +563,62 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const restoreAllData = async (data: Partial<AllData>) => {
     if (!db) return;
     await clearAllData();
+
+    const toTimestamp = (date: any): Timestamp => {
+        if (!date) return Timestamp.now();
+        if (date instanceof Timestamp) return date;
+        if (date instanceof Date) return Timestamp.fromDate(date);
+        return Timestamp.fromDate(new Date(date));
+    };
     
-    if (data.inventory) {
-        await addBatchItems(data.inventory);
-    }
+    // Check if there is data to restore before batching
+    const hasDataToRestore = 
+        (data.inventory && data.inventory.length > 0) ||
+        (data.vehicleModels && data.vehicleModels.length > 0) ||
+        (data.assembledVehicles && data.assembledVehicles.length > 0) ||
+        (data.batteryModels && data.batteryModels.length > 0) ||
+        (data.assembledBatteries && data.assembledBatteries.length > 0) ||
+        (data.customers && data.customers.length > 0);
+
+    if (!hasDataToRestore) return; // No data to restore, so exit early
 
     const batch = writeBatch(db);
+
+    if (data.inventory) {
+      data.inventory.forEach(item => {
+        const { id, ...itemData } = item;
+        const docRef = doc(collection(db, 'inventory'));
+        batch.set(docRef, {
+            ...itemData,
+            purchaseDate: toTimestamp(item.purchaseDate),
+            salesDate: item.salesDate ? toTimestamp(item.salesDate) : null,
+        });
+      });
+    }
+
     data.vehicleModels?.forEach(item => {
         const { id, ...itemData } = item;
-        const docRef = doc(getCollectionRef('vehicleModels'), id);
+        const docRef = doc(getCollectionRef('vehicleModels'));
         batch.set(docRef, itemData);
     });
     data.assembledVehicles?.forEach(item => {
         const { id, ...itemData } = item;
-        const docRef = doc(getCollectionRef('assembledVehicles'), id);
-        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : Timestamp.fromDate(new Date(item.assemblyDate as any));
-        batch.set(docRef, {...itemData, assemblyDate: date });
+        const docRef = doc(getCollectionRef('assembledVehicles'));
+        batch.set(docRef, {...itemData, assemblyDate: toTimestamp(item.assemblyDate) });
     });
     data.batteryModels?.forEach(item => {
         const { id, ...itemData } = item;
-        const docRef = doc(getCollectionRef('batteryModels'), id);
+        const docRef = doc(getCollectionRef('batteryModels'));
         batch.set(docRef, itemData);
     });
     data.assembledBatteries?.forEach(item => {
         const { id, ...itemData } = item;
-        const docRef = doc(getCollectionRef('assembledBatteries'), id);
-        const date = item.assemblyDate instanceof Timestamp ? item.assemblyDate : Timestamp.fromDate(new Date(item.assemblyDate as any));
-        batch.set(docRef, {...itemData, assemblyDate: date });
+        const docRef = doc(getCollectionRef('assembledBatteries'));
+        batch.set(docRef, {...itemData, assemblyDate: toTimestamp(item.assemblyDate) });
     });
     data.customers?.forEach(item => {
         const { id, ...itemData } = item;
-        const docRef = doc(getCollectionRef('customers'), id);
+        const docRef = doc(getCollectionRef('customers'));
         batch.set(docRef, itemData);
     });
     await batch.commit();
@@ -596,53 +650,47 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   
           if (!model) throw new Error("Assembly model not found.");
   
-          // Phase 1: Read all part documents first
-          const partDocRefs: { ref: DocumentReference<DocumentData>; partSpec: { itemStdCode: string; quantity: number; }; }[] = [];
-          
-          for (const part of parts) {
-            const itemQuery = query(
-              getCollectionRef('inventory'), 
-              where('itemStdCode', '==', part.itemStdCode), 
-              where('itemStatus', '==', 'In Stock'), 
-              limit(1)
-            );
-            const snapshot = await getDocs(itemQuery);
-            if (snapshot.empty) {
-              throw new Error(`Part ${part.itemStdCode} not found in stock.`);
-            }
-            partDocRefs.push({ref: snapshot.docs[0].ref, partSpec: part});
-          }
-          
-          const partDocs = await Promise.all(partDocRefs.map(item => transaction.get(item.ref)));
+          // Phase 1: Get references and read all part documents first
+          const partReads = await Promise.all(parts.map(async part => {
+              const itemQuery = query(
+                  getCollectionRef('inventory'),
+                  where('itemStdCode', '==', part.itemStdCode),
+                  where('itemStatus', '==', 'In Stock'),
+                  limit(1)
+              );
+              const snapshot = await getDocs(itemQuery);
+              if (snapshot.empty) {
+                  throw new Error(`Part ${part.itemStdCode} not found in stock.`);
+              }
+              const doc = snapshot.docs[0];
+              const transactionDoc = await transaction.get(doc.ref);
+              return { partSpec: part, doc: transactionDoc };
+          }));
+
+          // Phase 2: Validate stock and prepare writes
+          const writes: (() => void)[] = [];
           const partDocsDataMap = new Map<string, { doc: DocumentData, ref: DocumentReference }>();
 
-          // Phase 2: Validate stock
-          for (let i = 0; i < partDocs.length; i++) {
-            const partDoc = partDocs[i];
-            const { partSpec } = partDocRefs[i];
-
-            if (!partDoc.exists()) {
-              throw new Error(`Part ${partSpec.itemStdCode} does not exist.`);
-            }
-            const itemData = { id: partDoc.id, ...partDoc.data() } as InventoryItem;
-            if (itemData.quantity < partSpec.quantity) {
-              throw new Error(`Insufficient stock for ${itemData.productName} (${itemData.itemStdCode}).`);
-            }
-            partDocsDataMap.set(partSpec.itemStdCode, { doc: itemData, ref: partDoc.ref });
+          for(const { partSpec, doc: partDoc } of partReads) {
+              if (!partDoc.exists()) {
+                  throw new Error(`Part ${partSpec.itemStdCode} does not exist.`);
+              }
+              const itemData = partDoc.data() as InventoryItem;
+              if (itemData.quantity < partSpec.quantity) {
+                  throw new Error(`Insufficient stock for ${itemData.productName} (${itemData.itemStdCode}).`);
+              }
+              partDocsDataMap.set(partSpec.itemStdCode, { doc: itemData, ref: partDoc.ref });
+              
+              const newQuantity = itemData.quantity - partSpec.quantity;
+              if (newQuantity > 0) {
+                  writes.push(() => transaction.update(partDoc.ref, { quantity: newQuantity }));
+              } else {
+                  writes.push(() => transaction.delete(partDoc.ref));
+              }
           }
           
-          // Phase 3: Write all changes
-          for (const partSpec of parts) {
-            const partData = partDocsDataMap.get(partSpec.itemStdCode);
-            if (partData) {
-              const newQuantity = (partData.doc as InventoryItem).quantity - partSpec.quantity;
-              if (newQuantity > 0) {
-                transaction.update(partData.ref, { quantity: newQuantity });
-              } else {
-                transaction.delete(partData.ref);
-              }
-            }
-          }
+          // Phase 3: Execute all writes
+          writes.forEach(write => write());
 
           if (request.type === 'vehicle') {
             const vehicleData = request.data;
