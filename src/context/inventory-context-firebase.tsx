@@ -172,7 +172,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getCollectionRef = (name: string) => collection(db, name);
 
-    const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
+  const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
     
     await runTransaction(db, async (transaction) => {
@@ -220,12 +220,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     
         for (const item of items) {
             const itemWithStatus = { ...item, itemStatus: 'In Stock' as ItemStatus };
-            try {
-                await addItem(itemWithStatus);
-            } catch (error) {
-                console.error(`Failed to add item ${item.productName}:`, error);
-                // Optionally, collect failures and report them at the end.
-            }
+            // By removing the try/catch, any failure in addItem will bubble up
+            // and be caught by the caller in inventory-page-content.tsx
+            await addItem(itemWithStatus);
         }
     }, [db, addItem]);
   
@@ -247,7 +244,7 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
         const dataWithTimestamps = {
             ...updatedItemData,
             purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
-            salesDate: updatedItemData.salesDate ? Timestamp.fromDate(updatedItemData.salesDate as Date) : null,
+            salesDate: updatedItemData.salesDate instanceof Date ? Timestamp.fromDate(updatedItemData.salesDate) : null,
         };
 
         const q = query(
@@ -255,11 +252,11 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             where('itemStdCode', '==', dataWithTimestamps.itemStdCode),
             where('itemStatus', '==', dataWithTimestamps.itemStatus),
             where('productName', '==', dataWithTimestamps.productName),
+            where('productDetails', '==', dataWithTimestamps.productDetails || ''),
             where('unitPrice', '==', dataWithTimestamps.unitPrice),
+            where('purchasePrice', '==', dataWithTimestamps.purchasePrice || 0),
             where('vendorName', '==', dataWithTimestamps.vendorName),
             where('purchaseInvoiceNumber', '==', dataWithTimestamps.purchaseInvoiceNumber),
-            where('productDetails', '==', dataWithTimestamps.productDetails || ''),
-            where('purchasePrice', '==', dataWithTimestamps.purchasePrice || 0),
             limit(1)
         );
 
@@ -313,12 +310,11 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
             where('productName', '==', newDocPayload.productName),
+            where('productDetails', '==', newDocPayload.productDetails || ''),
             where('unitPrice', '==', newDocPayload.unitPrice),
+            where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            where('productDetails', '==', newDocPayload.productDetails || ''),
-            where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
-            where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
             limit(1)
         );
         
@@ -365,7 +361,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             if (!batterySnapshot.empty) {
                 await deleteAssembledBattery(batterySnapshot.docs[0].id, restock);
             }
-        } else if (SOLD_STATUSES.includes(itemToDelete.itemStatus)) {
+        } else if (SOLD_STATUSES.includes(itemToDelete.itemStatus as any)) {
             // This is a sold part. If restocking, we need to find the model it came from if it was part of a vehicle sale.
             // This part of the logic is complex and might need more business rules.
             // For now, we will just delete the record. If `restock` is true, a more advanced implementation would be needed.
@@ -847,7 +843,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
-
-    
