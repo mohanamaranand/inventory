@@ -231,29 +231,39 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [db]);
 
 
-  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string; salesDate?: Date }) => {
-      await runTransaction(db, async (transaction) => {
+  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string, salesDate?: Date }) => {
+    if (!db) return;
+    await runTransaction(db, async (transaction) => {
         const itemDocRef = doc(db, 'inventory', id);
         const itemDoc = await transaction.get(itemDocRef);
         if (!itemDoc.exists()) {
-          throw new Error('Document does not exist!');
+            throw new Error('Document does not exist!');
         }
         const itemToSplit = { id: itemDoc.id, ...itemDoc.data() } as InventoryItem;
 
         if (splitQuantity <= 0 || splitQuantity > itemToSplit.quantity) {
-          throw new Error('Invalid split quantity');
+            throw new Error('Invalid split quantity');
         }
 
         const { id: originalId, ...newItemData } = itemToSplit;
+        
+        let salesDateTimestamp: Timestamp | undefined = undefined;
+        if (newStatus.includes('Sold') && splitItemData?.salesDate) {
+            salesDateTimestamp = Timestamp.fromDate(splitItemData.salesDate);
+        } else if (newStatus.includes('Sold')) {
+            salesDateTimestamp = serverTimestamp() as Timestamp;
+        }
+
         const newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
             quantity: splitQuantity,
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
-            salesDate: splitItemData?.salesDate ?? (newStatus.includes('Sold') ? new Date() : undefined)
+            salesDate: salesDateTimestamp,
         };
 
+        // Query for an existing item to merge with
         const q = query(
             getCollectionRef('inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
@@ -264,22 +274,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
+            // Merge with existing item
             const existingDoc = querySnapshot.docs[0];
             const existingData = existingDoc.data() as InventoryItem;
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
+            // Create a new item
             const newDocRef = doc(collection(db, 'inventory'));
             transaction.set(newDocRef, newDocPayload);
         }
 
+        // Update the original item's quantity or delete it
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
             transaction.update(itemDocRef, { quantity: remainingQuantity });
         } else {
             transaction.delete(itemDocRef);
         }
-      });
-  }, [db]);
+    });
+}, [db]);
 
   const deleteItem = async (id: string, restock: boolean = false) => {
     if (restock) {
