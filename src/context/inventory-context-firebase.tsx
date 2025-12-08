@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, {
@@ -138,12 +137,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const assembledBatteriesQuery = useMemoFirebase(() => db ? collection(db, 'assembledBatteries') : null, [db]);
   const customersQuery = useMemoFirebase(() => db ? collection(db, 'customers') : null, [db]);
 
-  const { data: inventoryData, loading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
-  const { data: vehicleModelsData, loading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
-  const { data: assembledVehiclesData, loading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesQuery);
-  const { data: batteryModelsData, loading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
-  const { data: assembledBatteriesData, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
-  const { data: customersData, loading: loadingCustomers } = useCollection<Customer>(customersQuery);
+  const { data: inventoryData, isLoading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
+  const { data: vehicleModelsData, isLoading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
+  const { data: assembledVehiclesData, isLoading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesQuery);
+  const { data: batteryModelsData, isLoading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
+  const { data: assembledBatteriesData, isLoading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
+  const { data: customersData, isLoading: loadingCustomers } = useCollection<Customer>(customersQuery);
 
   const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : item.purchaseDate })), [inventoryData]);
   const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
@@ -191,8 +190,32 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [db]);
   
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    await addBatchItems([item]);
-  }, [addBatchItems]);
+    if (!db) return;
+    await runTransaction(db, async (transaction) => {
+      const q = query(
+        getCollectionRef('inventory'),
+        where('itemStdCode', '==', item.itemStdCode),
+        where('itemStatus', '==', item.itemStatus),
+        where('productName', '==', item.productName),
+        where('unitPrice', '==', item.unitPrice),
+        where('vendorName', '==', item.vendorName),
+        where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
+        limit(1)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const existingDoc = querySnapshot.docs[0];
+        const existingData = existingDoc.data() as InventoryItem;
+        const newQuantity = existingData.quantity + item.quantity;
+        transaction.update(existingDoc.ref, { quantity: newQuantity });
+      } else {
+        const docRef = doc(getCollectionRef('inventory'));
+        transaction.set(docRef, { ...item });
+      }
+    });
+  }, [db]);
 
 
   const updateItem = async (
@@ -204,24 +227,30 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
+     if (!db) return;
      await runTransaction(db, async (transaction) => {
         const originalDocRef = doc(db, 'inventory', id);
-        transaction.delete(originalDocRef);
-
+        
         const q = query(
           getCollectionRef('inventory'),
           where('itemStdCode', '==', updatedItemData.itemStdCode),
           where('itemStatus', '==', updatedItemData.itemStatus),
+          where('productName', '==', updatedItemData.productName),
+          where('unitPrice', '==', updatedItemData.unitPrice),
+          where('vendorName', '==', updatedItemData.vendorName),
+          where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber),
           limit(1)
         );
       
         const querySnapshot = await getDocs(q);
+        const mergeTargetDoc = querySnapshot.docs.find(doc => doc.id !== id);
 
-        if (!querySnapshot.empty && querySnapshot.docs[0].id !== id) {
-            const existingDoc = querySnapshot.docs[0];
-            const existingData = existingDoc.data() as InventoryItem;
+        transaction.delete(originalDocRef);
+
+        if (mergeTargetDoc) {
+            const existingData = mergeTargetDoc.data() as InventoryItem;
             const newQuantity = existingData.quantity + updatedItemData.quantity;
-            transaction.update(existingDoc.ref, { quantity: newQuantity });
+            transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
         } else {
             const newDocRef = doc(getCollectionRef('inventory'));
             transaction.set(newDocRef, updatedItemData);
@@ -263,28 +292,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             salesDate: salesDateTimestamp,
         };
 
-        // Query for an existing item to merge with
         const q = query(
             getCollectionRef('inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
+            where('productName', '==', newDocPayload.productName),
+            where('unitPrice', '==', newDocPayload.unitPrice),
+            where('vendorName', '==', newDocPayload.vendorName),
+            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
             limit(1)
         );
         
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-            // Merge with existing item
             const existingDoc = querySnapshot.docs[0];
             const existingData = existingDoc.data() as InventoryItem;
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
-            // Create a new item
             const newDocRef = doc(collection(db, 'inventory'));
             transaction.set(newDocRef, newDocPayload);
         }
 
-        // Update the original item's quantity or delete it
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
             transaction.update(itemDocRef, { quantity: remainingQuantity });
@@ -316,10 +345,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("No user is currently signed in.");
     
-    // First, delete the user's document from Firestore
     await deleteDoc(doc(db, "users", currentUser.uid));
     
-    // Then, delete the user from Firebase Authentication
     await deleteFirebaseAuthUser(currentUser);
   }, [auth, db]);
 
@@ -613,7 +640,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             ...item,
             purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate : Timestamp.fromDate(new Date(item.purchaseDate as any))
         }))
-        await addBatchItems(inventoryWithDates);
+        for (const item of inventoryWithDates) {
+            await addItem(item);
+        }
     }
 
     const batch = writeBatch(db);
