@@ -300,10 +300,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }), [cache.backups]);
 
 
-  const addBatchItems = useCallback((items: Omit<InventoryItem, 'id' | 'itemStatus'>[]): PendingChange[] => {
-    const changesToAdd: PendingChange[] = [];
+  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
     setCache(prevCache => {
         const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
+        const changesToAdd: PendingChange[] = [];
 
         items.forEach(item => {
             const match = Array.from(newCache.inventory.values()).find(
@@ -321,14 +321,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 changesToAdd.push({ type: 'create', collection: 'inventory', id, payload: newItem });
             }
         });
+        
         setPendingChanges(prev => [...prev, ...changesToAdd]);
         return newCache;
     });
-    return changesToAdd;
   }, []);
 
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    addBatchItems([item]);
+    await addBatchItems([item]);
   }, [addBatchItems]);
 
   const updateItem = useCallback(async (id: string, updatedItem: Partial<Omit<InventoryItem, 'id'>>) => {
@@ -470,6 +470,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           if (match) {
             const updatedItem = { ...match, quantity: match.quantity + restoredItemData.quantity };
             newCache.inventory.set(match.id, updatedItem);
+            // This is a temporary update, it will be squashed later
             newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: updatedItem.quantity } });
           } else {
             const newId = uuidv4();
@@ -1036,3 +1037,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
