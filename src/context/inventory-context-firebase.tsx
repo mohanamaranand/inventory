@@ -218,6 +218,8 @@ const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
 const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
     for (const item of items) {
+        // We use the robust `addItem` function for each item in the batch.
+        // This ensures consistent logic for both single and batch additions.
         await addItem(item);
     }
 }, [db, addItem]);
@@ -284,24 +286,47 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
         if (splitQuantity <= 0 || splitQuantity > itemToSplit.quantity) {
             throw new Error('Invalid split quantity');
         }
-
-        // Create a sanitized payload for the new document. NO MERGING.
+        
+        const { id: tempId, ...baseData } = itemToSplit;
+        
         const newDocPayload = {
-            ...itemToSplit,
+            ...baseData,
             quantity: splitQuantity,
             itemStatus: newStatus,
-            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
+            productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? (itemToSplit.salesInvoiceNumber ?? '') : ''),
             salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
         };
-        // Remove the ID from the payload before writing
-        const { id: tempId, ...finalDataToWrite } = newDocPayload;
 
-        // Always create a new document for the split portion
-        const newDocRef = doc(collection(db, 'inventory'));
-        transaction.set(newDocRef, finalDataToWrite);
+        const purchaseDate = itemToSplit.purchaseDate instanceof Date 
+            ? Timestamp.fromDate(itemToSplit.purchaseDate)
+            : itemToSplit.purchaseDate;
+            
+        const q = query(
+            collection(db, 'inventory'),
+            where('itemStdCode', '==', newDocPayload.itemStdCode),
+            where('itemStatus', '==', newDocPayload.itemStatus),
+            where('productName', '==', newDocPayload.productName),
+            where('productDetails', '==', newDocPayload.productDetails || ''),
+            where('unitPrice', '==', newDocPayload.unitPrice),
+            where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
+            where('vendorName', '==', newDocPayload.vendorName),
+            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
+            where('purchaseDate', '==', purchaseDate),
+            limit(1)
+        );
 
-        // Update or delete the original item
+        const querySnapshot = await transaction.get(q);
+
+        if (!querySnapshot.empty) {
+            const existingDoc = querySnapshot.docs[0];
+            const existingData = existingDoc.data() as InventoryItem;
+            transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
+        } else {
+            const newDocRef = doc(collection(db, 'inventory'));
+            transaction.set(newDocRef, newDocPayload);
+        }
+
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
             transaction.update(itemDocRef, { quantity: remainingQuantity });
