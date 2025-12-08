@@ -67,16 +67,16 @@ export function InventoryPageContent() {
     if(fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!importFile) return;
+
+    if (deleteBeforeImport) {
+        await clearAllData();
+    }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        if(deleteBeforeImport) {
-            await clearAllData();
-        }
-
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
@@ -102,14 +102,15 @@ export function InventoryPageContent() {
             return;
           }
 
-          const date = row['Purchase Date'] || row['purchaseDate'] ? new Date(row['Purchase Date'] || row['purchaseDate']) : new Date();
+          const purchaseDate = row['Purchase Date'] || row['purchaseDate'];
+          const date = purchaseDate ? new Date(purchaseDate) : new Date();
 
           const itemData: Omit<InventoryItem, 'id' | 'itemStatus'> = {
             purchaseInvoiceNumber: String(
               row['Purchase Invoice Number'] || row['purchaseInvoiceNumber'] || ''
             ),
             vendorName: String(row['Vendor Name'] || row['vendorName'] || ''),
-            purchaseDate: Timestamp.fromDate(date),
+            purchaseDate: date,
             itemStdCode: String(itemStdCode),
             itemCategory: itemCategory,
             productName: String(row['Product Name'] || row['productName'] || ''),
@@ -216,5 +217,3 @@ export function InventoryPageContent() {
     </>
   );
 }
-
-    
