@@ -28,11 +28,11 @@ interface SyncDialogProps {
 const AUTO_SYNC_TIMEOUT = 60 * 1000; // 1 minute
 
 function getChangeDescription(change: PendingChange): string {
-    const { type, collection, payload } = change;
+    const { type, collection, payload, id } = change;
     const collectionName = collection.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
 
     // Safely access payload properties, with a fallback to the ID
-    const name = payload?.name || payload?.productName || `ID ${change.id.substring(0,6)}...`;
+    const name = payload?.name || payload?.productName || `ID ${id.substring(0,6)}...`;
 
     switch (type) {
         case 'create':
@@ -42,8 +42,7 @@ function getChangeDescription(change: PendingChange): string {
             return `Update ${collectionName} "${name}": changed ${fields}`;
         case 'delete':
              // For deletes, payload might not exist. Safely access it.
-            const deleteName = payload?.name || payload?.productName || `ID ${change.id}`;
-            return `Delete ${collectionName}: "${deleteName}"`;
+            return `Delete ${collectionName}: "${name}"`;
         default:
             return "Unknown change";
     }
@@ -107,5 +106,3 @@ export function SyncDialog({ isOpen, onOpenChange, onConfirm, pendingChanges, is
     </AlertDialog>
   );
 }
-
-    

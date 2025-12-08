@@ -123,6 +123,7 @@ export function InventoryPageContent() {
             ),
             unitPrice: Number(row['Unit Price'] || row['unitPrice'] || 0),
             purchasePrice: Number(row['Purchase Price'] || row['purchasePrice'] || 0),
+            imageUrl: row['Image URL'] || row['imageUrl'] || '',
           };
           newItems.push(itemData);
         });
@@ -133,7 +134,7 @@ export function InventoryPageContent() {
 
         const descriptions = [];
         if (newItems.length > 0)
-          descriptions.push(`${newItems.length} new items added/updated.`);
+          descriptions.push(`${newItems.length} items processed for import.`);
         if (skippedCodeCount > 0)
           descriptions.push(
             `${skippedCodeCount} rows skipped due to missing 'Item STD Code'.`
