@@ -172,70 +172,64 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const getCollectionRef = (name: string) => collection(db, name);
 
-  const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
+    const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
-  
-    for (const item of items) {
-      await runTransaction(db, async (transaction) => {
-        // Ensure purchaseDate is a Timestamp
-        const itemWithTimestamp = {
-          ...item,
-          purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
+    
+    await runTransaction(db, async (transaction) => {
+        const itemWithDefaults = {
+            ...item,
+            itemStatus: item.itemStatus || 'In Stock',
+        };
+
+        const itemWithTimestamps = {
+            ...itemWithDefaults,
+            purchaseDate: itemWithDefaults.purchaseDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.purchaseDate) : itemWithDefaults.purchaseDate,
+            salesDate: itemWithDefaults.salesDate ? (itemWithDefaults.salesDate instanceof Date ? Timestamp.fromDate(itemWithDefaults.salesDate) : itemWithDefaults.salesDate) : null,
         };
 
         const q = query(
-          getCollectionRef('inventory'),
-          where('itemStdCode', '==', itemWithTimestamp.itemStdCode),
-          where('itemStatus', '==', 'In Stock'),
-          limit(1)
+            getCollectionRef('inventory'),
+            where('itemStdCode', '==', itemWithTimestamps.itemStdCode),
+            where('itemStatus', '==', itemWithTimestamps.itemStatus),
+            where('productName', '==', itemWithTimestamps.productName),
+            where('unitPrice', '==', itemWithTimestamps.unitPrice),
+            where('vendorName', '==', itemWithTimestamps.vendorName),
+            where('purchaseInvoiceNumber', '==', itemWithTimestamps.purchaseInvoiceNumber),
+            where('productDetails', '==', itemWithTimestamps.productDetails || ''),
+            where('purchasePrice', '==', itemWithTimestamps.purchasePrice || 0),
+            limit(1)
         );
-  
+
         const querySnapshot = await transaction.get(q);
-  
+
         if (!querySnapshot.empty) {
-          const existingDoc = querySnapshot.docs[0];
-          const existingData = existingDoc.data() as InventoryItem;
-          const newQuantity = existingData.quantity + itemWithTimestamp.quantity;
-          transaction.update(existingDoc.ref, { quantity: newQuantity });
+            const existingDoc = querySnapshot.docs[0];
+            const existingData = existingDoc.data() as InventoryItem;
+            const newQuantity = existingData.quantity + itemWithTimestamps.quantity;
+            transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
-          const docRef = doc(getCollectionRef('inventory'));
-          transaction.set(docRef, { ...itemWithTimestamp, itemStatus: 'In Stock' });
+            const docRef = doc(getCollectionRef('inventory'));
+            transaction.set(docRef, itemWithTimestamps);
         }
-      });
-    }
-  }, [db]);
-  
-  const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    if (!db) return;
-    await runTransaction(db, async (transaction) => {
-      const q = query(
-        getCollectionRef('inventory'),
-        where('itemStdCode', '==', item.itemStdCode),
-        where('itemStatus', '==', item.itemStatus),
-        where('productName', '==', item.productName),
-        where('unitPrice', '==', item.unitPrice),
-        where('vendorName', '==', item.vendorName),
-        where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
-        where('purchasePrice', '==', item.purchasePrice),
-        where('productDetails', '==', item.productDetails),
-        limit(1)
-      );
-
-      const querySnapshot = await transaction.get(q);
-
-      if (!querySnapshot.empty) {
-        const existingDoc = querySnapshot.docs[0];
-        const existingData = existingDoc.data() as InventoryItem;
-        const newQuantity = existingData.quantity + item.quantity;
-        transaction.update(existingDoc.ref, { quantity: newQuantity });
-      } else {
-        const docRef = doc(getCollectionRef('inventory'));
-        transaction.set(docRef, { ...item });
-      }
     });
-  }, [db]);
+    }, [db]);
 
 
+    const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id' | 'itemStatus'>[]) => {
+        if (!db) return;
+    
+        for (const item of items) {
+            const itemWithStatus = { ...item, itemStatus: 'In Stock' as ItemStatus };
+            try {
+                await addItem(itemWithStatus);
+            } catch (error) {
+                console.error(`Failed to add item ${item.productName}:`, error);
+                // Optionally, collect failures and report them at the end.
+            }
+        }
+    }, [db, addItem]);
+  
+  
   const updateItem = async (
     id: string,
     updatedItem: Partial<Omit<InventoryItem, 'id'>>
@@ -252,7 +246,7 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
         
         const dataWithTimestamps = {
             ...updatedItemData,
-            purchaseDate: Timestamp.fromDate(updatedItemData.purchaseDate as Date),
+            purchaseDate: updatedItemData.purchaseDate instanceof Date ? Timestamp.fromDate(updatedItemData.purchaseDate) : updatedItemData.purchaseDate,
             salesDate: updatedItemData.salesDate ? Timestamp.fromDate(updatedItemData.salesDate as Date) : null,
         };
 
@@ -264,8 +258,8 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             where('unitPrice', '==', dataWithTimestamps.unitPrice),
             where('vendorName', '==', dataWithTimestamps.vendorName),
             where('purchaseInvoiceNumber', '==', dataWithTimestamps.purchaseInvoiceNumber),
-            where('productDetails', '==', dataWithTimestamps.productDetails),
-            where('purchasePrice', '==', dataWithTimestamps.purchasePrice),
+            where('productDetails', '==', dataWithTimestamps.productDetails || ''),
+            where('purchasePrice', '==', dataWithTimestamps.purchasePrice || 0),
             limit(1)
         );
 
@@ -322,8 +316,8 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('unitPrice', '==', newDocPayload.unitPrice),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            where('productDetails', '==', newDocPayload.productDetails),
-            where('purchasePrice', '==', newDocPayload.purchasePrice),
+            where('productDetails', '==', newDocPayload.productDetails || ''),
+            where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
             where('salesInvoiceNumber', '==', newDocPayload.salesInvoiceNumber || ''),
             limit(1)
         );
@@ -853,5 +847,7 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
 
     
