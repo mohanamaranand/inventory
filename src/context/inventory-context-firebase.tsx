@@ -24,7 +24,7 @@ import {
   getDoc,
   addDoc,
 } from 'firebase/firestore';
-import { useAuth, useFirestore, useCollection } from '@/firebase';
+import { useAuth, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 
 import type {
@@ -187,13 +187,21 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Firestore data hooks - use raw data from server
-  const { data: serverInventory, loading: loadingInventory } = useCollection<InventoryItem>(db ? collection(db, 'inventory') : null);
-  const { data: serverVehicleModels, loading: loadingVehicleModels } = useCollection<VehicleModel>(db ? collection(db, 'vehicleModels') : null);
-  const { data: serverAssembledVehicles, loading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(db ? collection(db, 'assembledVehicles') : null);
-  const { data: serverBatteryModels, loading: loadingBatteryModels } = useCollection<BatteryModel>(db ? collection(db, 'batteryModels') : null);
-  const { data: serverAssembledBatteries, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(db ? collection(db, 'assembledBatteries') : null);
-  const { data: serverCustomers, loading: loadingCustomers } = useCollection<Customer>(db ? collection(db, 'customers') : null);
-  const { data: serverBackups, loading: loadingBackups } = useCollection<Backup>(db ? collection(db, 'backups') : null);
+  const inventoryCollection = useMemoFirebase(() => db ? collection(db, 'inventory') : null, [db]);
+  const vehicleModelsCollection = useMemoFirebase(() => db ? collection(db, 'vehicleModels') : null, [db]);
+  const assembledVehiclesCollection = useMemoFirebase(() => db ? collection(db, 'assembledVehicles') : null, [db]);
+  const batteryModelsCollection = useMemoFirebase(() => db ? collection(db, 'batteryModels') : null, [db]);
+  const assembledBatteriesCollection = useMemoFirebase(() => db ? collection(db, 'assembledBatteries') : null, [db]);
+  const customersCollection = useMemoFirebase(() => db ? collection(db, 'customers') : null, [db]);
+  const backupsCollection = useMemoFirebase(() => db ? collection(db, 'backups') : null, [db]);
+
+  const { data: serverInventory, loading: loadingInventory } = useCollection<InventoryItem>(inventoryCollection);
+  const { data: serverVehicleModels, loading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsCollection);
+  const { data: serverAssembledVehicles, loading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesCollection);
+  const { data: serverBatteryModels, loading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsCollection);
+  const { data: serverAssembledBatteries, loading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesCollection);
+  const { data: serverCustomers, loading: loadingCustomers } = useCollection<Customer>(customersCollection);
+  const { data: serverBackups, loading: loadingBackups } = useCollection<Backup>(backupsCollection);
 
 
   const loading =
@@ -285,7 +293,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const batteryModels = useMemo(() => Array.from(cache.batteryModels.values()), [cache.batteryModels]);
   const assembledBatteries = useMemo(() => Array.from(cache.assembledBatteries.values()), [cache.assembledBatteries]);
   const customers = useMemo(() => Array.from(cache.customers.values()), [cache.customers]);
-  const backups = useMemo(() => Array.from(cache.backups.values()).sort((a,b) => {
+  const backups = useMemo(() => Array.from(cache.backups.values()).sort((a, b) => {
     if (!a.createdAt) return 1;
     if (!b.createdAt) return -1;
     return b.createdAt.toMillis() - a.createdAt.toMillis()
@@ -313,14 +321,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 changesToAdd.push({ type: 'create', collection: 'inventory', id, payload: newItem });
             }
         });
+        setPendingChanges(prev => [...prev, ...changesToAdd]);
         return newCache;
     });
     return changesToAdd;
   }, []);
 
   const addItem = useCallback(async (item: Omit<InventoryItem, 'id'>) => {
-    const newChanges = addBatchItems([item]);
-    setPendingChanges(prev => [...prev, ...newChanges]);
+    addBatchItems([item]);
   }, [addBatchItems]);
 
   const updateItem = useCallback(async (id: string, updatedItem: Partial<Omit<InventoryItem, 'id'>>) => {
@@ -336,32 +344,32 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
-    const newChanges: PendingChange[] = [];
     setCache(prevCache => {
-      const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
-  
-      if (newCache.inventory.has(id)) {
-        newCache.inventory.delete(id);
-        newChanges.push({ type: 'delete', collection: 'inventory', id });
-      }
-  
-      const match = Array.from(newCache.inventory.values()).find(
-        (existing) => existing.itemStdCode === updatedItemData.itemStdCode && existing.itemStatus === updatedItemData.itemStatus
-      );
-  
-      if (match) {
-        const mergedItem = { ...match, quantity: match.quantity + updatedItemData.quantity };
-        newCache.inventory.set(match.id, mergedItem);
-        newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: mergedItem.quantity } });
-      } else {
-        const newId = uuidv4();
-        const newItem = { ...updatedItemData, id: newId };
-        newCache.inventory.set(newId, newItem);
-        newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
-      }
-      return newCache;
+        const newCache = { ...prevCache, inventory: new Map(prevCache.inventory) };
+        const newChanges: PendingChange[] = [];
+
+        if (newCache.inventory.has(id)) {
+            newCache.inventory.delete(id);
+            newChanges.push({ type: 'delete', collection: 'inventory', id });
+        }
+    
+        const match = Array.from(newCache.inventory.values()).find(
+            (existing) => existing.itemStdCode === updatedItemData.itemStdCode && existing.itemStatus === updatedItemData.itemStatus
+        );
+    
+        if (match) {
+            const mergedItem = { ...match, quantity: match.quantity + updatedItemData.quantity };
+            newCache.inventory.set(match.id, mergedItem);
+            newChanges.push({ type: 'update', collection: 'inventory', id: match.id, payload: { quantity: mergedItem.quantity } });
+        } else {
+            const newId = uuidv4();
+            const newItem = { ...updatedItemData, id: newId };
+            newCache.inventory.set(newId, newItem);
+            newChanges.push({ type: 'create', collection: 'inventory', id: newId, payload: newItem });
+        }
+        setPendingChanges(prev => [...prev, ...newChanges]);
+        return newCache;
     });
-    setPendingChanges(prev => [...prev, ...newChanges]);
   }, []);
   
 
@@ -827,7 +835,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     setCache(prevCache => {
         const newChanges: PendingChange[] = [];
         
-        const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers', 'backups'];
+        const collections: (keyof LocalCache)[] = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
         
         collections.forEach(coll => {
             if (prevCache[coll]) {
@@ -836,6 +844,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
         });
+        
+        if (prevCache.backups) {
+            prevCache.backups.forEach((_, id) => {
+                newChanges.push({ type: 'delete', collection: 'backups', id });
+            });
+        }
+
 
         setPendingChanges(prev => [...prev, ...newChanges]);
 
