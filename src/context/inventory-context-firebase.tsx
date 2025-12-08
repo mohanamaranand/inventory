@@ -298,7 +298,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
         };
 
-        const purchaseDate = itemToSplit.purchaseDate instanceof Date 
+        const purchaseDateAsTimestamp = itemToSplit.purchaseDate instanceof Date 
             ? Timestamp.fromDate(itemToSplit.purchaseDate)
             : itemToSplit.purchaseDate;
             
@@ -312,7 +312,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             where('purchasePrice', '==', newDocPayload.purchasePrice || 0),
             where('vendorName', '==', newDocPayload.vendorName),
             where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            where('purchaseDate', '==', purchaseDate),
+            where('purchaseDate', '==', purchaseDateAsTimestamp),
             limit(1)
         );
 
@@ -324,7 +324,11 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {
             const newDocRef = doc(collection(db, 'inventory'));
-            transaction.set(newDocRef, newDocPayload);
+            const dataToSet = {
+                ...newDocPayload,
+                purchaseDate: purchaseDateAsTimestamp,
+            };
+            transaction.set(newDocRef, dataToSet);
         }
 
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
@@ -835,3 +839,4 @@ export const useInventory = () => {
     
 
     
+
