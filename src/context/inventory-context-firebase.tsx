@@ -270,7 +270,7 @@ const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<In
             transaction.update(mergeTargetDoc.ref, { quantity: newQuantity });
             transaction.delete(originalDocRef);
         } else {
-            transaction.update(originalDocRef, dataWithTimestamps);
+            transaction.set(originalDocRef, dataWithTimestamps);
         }
     });
 }, [db]);
@@ -299,7 +299,6 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
 
         const newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
-            purchaseDate: newItemData.purchaseDate,
             quantity: splitQuantity,
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
@@ -345,22 +344,40 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
     });
 }, [db]);
 
-  const deleteItem = async (id: string, restock: boolean = false) => {
-    if (restock) {
-      // This is a simplified version. For full restock logic of assembled items,
-      // you would need to read the item, determine its components, and add them back.
-      // For now, we'll just delete.
-    }
-    await deleteDoc(doc(db, 'inventory', id));
-  };
+    const deleteItem = async (id: string, restock: boolean = false) => {
+        if (!db) return;
+        const itemToDelete = inventory.find(item => item.id === id);
+        if (!itemToDelete) return;
+
+        if (itemToDelete.itemCategory === 'Assembled Vehicle') {
+            const chassisNumber = itemToDelete.itemStdCode.replace('ASM-V-', '');
+            const vehicleQuery = query(collection(db, 'assembledVehicles'), where('chassisNumber', '==', chassisNumber), limit(1));
+            const vehicleSnapshot = await getDocs(vehicleQuery);
+            if (!vehicleSnapshot.empty) {
+                await deleteAssembledVehicle(vehicleSnapshot.docs[0].id, restock);
+            }
+        } else if (itemToDelete.itemCategory === 'Assembled Battery') {
+            const serialNumber = itemToDelete.itemStdCode.replace('ASM-B-', '');
+            const batteryQuery = query(collection(db, 'assembledBatteries'), where('serialNumber', '==', serialNumber), limit(1));
+            const batterySnapshot = await getDocs(batteryQuery);
+            if (!batterySnapshot.empty) {
+                await deleteAssembledBattery(batterySnapshot.docs[0].id, restock);
+            }
+        } else if (SOLD_STATUSES.includes(itemToDelete.itemStatus)) {
+            // This is a sold part. If restocking, we need to find the model it came from if it was part of a vehicle sale.
+            // This part of the logic is complex and might need more business rules.
+            // For now, we will just delete the record. If `restock` is true, a more advanced implementation would be needed.
+            await deleteDoc(doc(db, 'inventory', id));
+        }
+        else {
+            await deleteDoc(doc(db, 'inventory', id));
+        }
+    };
   
   const deleteMultipleItems = async (ids: string[], restock: boolean = false) => {
-    const batch = writeBatch(db);
-    ids.forEach(id => {
-        const docRef = doc(db, 'inventory', id);
-        batch.delete(docRef);
-    });
-    await batch.commit();
+    for (const id of ids) {
+        await deleteItem(id, restock);
+    }
   };
 
   const deleteCurrentUser = useCallback(async () => {
@@ -828,3 +845,5 @@ export const useInventory = () => {
   }
   return context;
 };
+
+    
