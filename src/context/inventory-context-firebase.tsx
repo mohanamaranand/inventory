@@ -13,6 +13,7 @@ import React, {
 import {
   collection,
   doc,
+  setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -185,7 +186,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       imageUrl: item.imageUrl || '',
       itemStatus: item.itemStatus || 'In Stock',
     };
-    await setDoc(docRef, dataToSave);
+    await setDoc(docRef, dataToSave as any);
   }, [db]);
 
 
@@ -200,13 +201,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             ...item,
             purchaseDate: item.purchaseDate instanceof Date ? Timestamp.fromDate(item.purchaseDate) : item.purchaseDate,
             salesDate: item.salesDate instanceof Date ? Timestamp.fromDate(item.salesDate) : null,
-            productDetails: item.productDetails || '',
-            purchasePrice: item.purchasePrice || 0,
-            salesInvoiceNumber: item.salesInvoiceNumber || '',
-            imageUrl: item.imageUrl || '',
-            itemStatus: item.itemStatus || 'In Stock',
         };
-        batch.set(docRef, dataToSave);
+        batch.set(docRef, dataToSave as any);
     }
     await batch.commit();
   }, [db]);
@@ -255,11 +251,11 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails ?? '',
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? '',
-            salesDate: splitItemData?.salesDate,
+            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : null,
             purchaseDate: itemToSplit.purchaseDate, 
         };
         
-        transaction.set(newDocRef, newDocPayload);
+        transaction.set(newDocRef, newDocPayload as any);
 
         const remainingQuantity = itemToSplit.quantity - splitQuantity;
         if (remainingQuantity > 0) {
@@ -599,7 +595,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
             };
             
             const newInventoryItemRef = doc(collection(db, 'inventory'));
-            transaction.set(newInventoryItemRef, assembledItem);
+            transaction.set(newInventoryItemRef, assembledItem as any);
           });
         } else if (request.type === 'battery') {
             await runTransaction(db, async (transaction) => {
@@ -658,7 +654,7 @@ const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQua
                   purchasePrice: 0,
               };
               const newInventoryItemRef = doc(collection(db, 'inventory'));
-              transaction.set(newInventoryItemRef, assembledItem);
+              transaction.set(newInventoryItemRef, assembledItem as any);
             });
         }
       } catch (error) {
