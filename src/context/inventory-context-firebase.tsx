@@ -182,16 +182,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     // Sanitize payload to prevent 'undefined' values which Firestore rejects.
     const sanitizedPayload = {
       ...itemPayload,
-      productDetails: itemPayload.productDetails || '',
-      purchasePrice: itemPayload.purchasePrice || 0,
-      salesInvoiceNumber: itemPayload.salesInvoiceNumber || '',
-      customerId: itemPayload.customerId || '',
+      productDetails: itemPayload.productDetails ?? '',
+      purchasePrice: itemPayload.purchasePrice ?? 0,
+      salesInvoiceNumber: itemPayload.salesInvoiceNumber ?? '',
+      customerId: itemPayload.customerId ?? '',
       salesDate: itemPayload.salesDate ? (itemPayload.salesDate instanceof Timestamp ? itemPayload.salesDate : Timestamp.fromDate(itemPayload.salesDate)) : null,
+      purchaseDate: itemPayload.purchaseDate instanceof Timestamp ? itemPayload.purchaseDate : Timestamp.fromDate(itemPayload.purchaseDate)
     };
     
-    // Ensure purchaseDate is a Timestamp for querying
-    const purchaseDateAsTimestamp = itemPayload.purchaseDate instanceof Timestamp ? itemPayload.purchaseDate : Timestamp.fromDate(itemPayload.purchaseDate);
-
     const q = query(
       collection(db, 'inventory'),
       where('itemStdCode', '==', sanitizedPayload.itemStdCode),
@@ -200,16 +198,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       where('unitPrice', '==', sanitizedPayload.unitPrice),
       where('storageLocation', '==', sanitizedPayload.storageLocation),
       where('purchaseInvoiceNumber', '==', sanitizedPayload.purchaseInvoiceNumber),
-      where('purchaseDate', '==', purchaseDateAsTimestamp),
+      where('purchaseDate', '==', sanitizedPayload.purchaseDate),
       where('itemStatus', '==', sanitizedPayload.itemStatus),
       where('salesInvoiceNumber', '==', sanitizedPayload.salesInvoiceNumber),
       where('customerId', '==', sanitizedPayload.customerId),
       limit(1)
     );
   
-    // Note: getDocs() is not allowed in transactions, but it's okay here
-    // because this helper is called from functions that will run it before the transaction.
-    // For functions that run it INSIDE a transaction, they must fetch docs beforehand.
     const snapshot = await getDocs(q);
   
     if (!snapshot.empty) {
@@ -219,8 +214,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       transaction.update(existingDoc.ref, { quantity: newQuantity });
     } else {
       const newDocRef = doc(collection(db, 'inventory'));
-      // Use the fully sanitized payload for writing
-      transaction.set(newDocRef, { ...sanitizedPayload, purchaseDate: purchaseDateAsTimestamp });
+      transaction.set(newDocRef, sanitizedPayload);
     }
   }, [db]);
   
@@ -235,7 +229,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const addBatchItems = useCallback(async (items: Omit<InventoryItem, 'id'>[]) => {
     if (!db) return;
-    // Batching with transactions is complex; it's safer to run one transaction per item for merging.
     for (const item of items) {
       await addItem(item);
     }
@@ -280,7 +273,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             transaction.delete(itemDocRef);
         }
 
-        // Create the payload for the new/split item and use the merge logic
+        // Create the payload for the new/split item
         const { id: originalId, ...newItemData } = itemToSplit;
         
         const newDocPayload: Omit<InventoryItem, 'id'> = {
@@ -292,6 +285,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             salesDate: splitItemData?.salesDate,
             purchaseDate: itemToSplit.purchaseDate,
         };
+
+        // If the new status is NOT a sold status, clear sales data.
+        if (!SOLD_STATUSES.includes(newStatus as any)) {
+            newDocPayload.salesInvoiceNumber = '';
+            newDocPayload.salesDate = undefined;
+            newDocPayload.customerId = '';
+        }
         
         await findAndMergeItem(transaction, newDocPayload);
     });
@@ -365,31 +365,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
     if (!db) return;
   
-    // Step 1: Query for the inventory item outside the transaction.
     const vehicleRef = doc(db, 'assembledVehicles', id);
-    const vehicleSnap = await getDocs(query(collection(db, 'assembledVehicles'), where('__name__', '==', id), limit(1)));
-    if (vehicleSnap.empty) throw new Error("Assembled vehicle not found to delete.");
-    const vehicle = vehicleSnap.docs[0].data() as AssembledVehicle;
-  
+    const vehicleDoc = await getDocs(query(collection(db, 'assembledVehicles'), where('__name__', '==', id), limit(1)));
+    if (vehicleDoc.empty) throw new Error("Assembled vehicle not found.");
+    const vehicle = vehicleDoc.docs[0].data() as AssembledVehicle;
+    
     const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
-    // Step 2: Run the transaction with all necessary refs.
     await runTransaction(db, async (transaction) => {
-      const vehicleDoc = await transaction.get(vehicleRef);
-      if (!vehicleDoc.exists()) {
-        return; // Already deleted.
-      }
+      const vehicleSnap = await transaction.get(vehicleRef);
+      if (!vehicleSnap.exists()) return;
   
       if (restock) {
         const model = getVehicleModel(vehicle.modelId);
         if (model?.parts) {
           for (const part of model.parts) {
-            // Find the item to restock. Assume we find one matching item.
-            // This is a simplification. A real-world scenario might need to handle multiple stock locations, etc.
              const itemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
-             const itemSnapshot = await getDocs(itemQuery); // This read is outside the transaction, which is fine for this logic.
+             const itemSnapshot = await getDocs(itemQuery);
              if (!itemSnapshot.empty) {
                  const itemDoc = itemSnapshot.docs[0];
                  const itemData = itemDoc.data() as InventoryItem;
@@ -422,22 +416,18 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteAssembledBattery = async (id: string, restock: boolean = false) => {
     if (!db) return;
   
-    // Step 1: Query for related docs outside the transaction.
     const batteryRef = doc(db, 'assembledBatteries', id);
-    const batterySnap = await getDocs(query(collection(db, 'assembledBatteries'), where('__name__', '==', id), limit(1)));
-    if (batterySnap.empty) throw new Error("Assembled battery not found to delete.");
-    const battery = batterySnap.docs[0].data() as AssembledBattery;
+    const batteryDoc = await getDocs(query(collection(db, 'assembledBatteries'), where('__name__', '==', id), limit(1)));
+    if (batteryDoc.empty) throw new Error("Assembled battery not found.");
+    const battery = batteryDoc.docs[0].data() as AssembledBattery;
   
     const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
-    // Step 2: Run the transaction.
     await runTransaction(db, async (transaction) => {
-      const batteryDoc = await transaction.get(batteryRef);
-      if (!batteryDoc.exists()) {
-        return;
-      }
+      const batterySnap = await transaction.get(batteryRef);
+      if (!batterySnap.exists()) return;
   
       if (restock) {
         const model = getBatteryModel(battery.modelId);
@@ -607,9 +597,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           if (!model) throw new Error("Assembly model not found.");
   
           // Phase 1: Read all part documents first
-          const partDocsRefs: {ref: DocumentReference, partSpec: { itemStdCode: string; quantity: number }}[] = [];
-          const partDocsDataMap = new Map<string, { doc: DocumentData, ref: DocumentReference }>();
-
+          const partDocRefs: { ref: DocumentReference<DocumentData>; partSpec: { itemStdCode: string; quantity: number; }; }[] = [];
+          
           for (const part of parts) {
             const itemQuery = query(
               getCollectionRef('inventory'), 
@@ -621,15 +610,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             if (snapshot.empty) {
               throw new Error(`Part ${part.itemStdCode} not found in stock.`);
             }
-            partDocsRefs.push({ref: snapshot.docs[0].ref, partSpec: part});
+            partDocRefs.push({ref: snapshot.docs[0].ref, partSpec: part});
           }
           
-          const partDocs = await Promise.all(partDocsRefs.map(item => transaction.get(item.ref)));
+          const partDocs = await Promise.all(partDocRefs.map(item => transaction.get(item.ref)));
+          const partDocsDataMap = new Map<string, { doc: DocumentData, ref: DocumentReference }>();
 
           // Phase 2: Validate stock
           for (let i = 0; i < partDocs.length; i++) {
             const partDoc = partDocs[i];
-            const { partSpec } = partDocsRefs[i];
+            const { partSpec } = partDocRefs[i];
 
             if (!partDoc.exists()) {
               throw new Error(`Part ${partSpec.itemStdCode} does not exist.`);
