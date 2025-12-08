@@ -72,7 +72,8 @@ interface SaleData {
   }[];
 }
 
-interface InventoryContextType extends AllData {
+interface InventoryContextType extends Omit<AllData, 'backups'> {
+  backups: Backup[];
   loading: boolean;
   pendingChanges: PendingChange[];
   syncChanges: () => Promise<void>;
@@ -154,7 +155,7 @@ function convertDatesToTimestamps(data: any): any {
   if (Array.isArray(data)) {
     return data.map(item => convertDatesToTimestamps(item));
   }
-  if (typeof data === 'object' && data !== null) {
+  if (typeof data === 'object' && data !== null && !(data instanceof Timestamp)) {
     const newData: { [key: string]: any } = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -239,7 +240,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batteryModels: Array.from(cache.batteryModels.values()),
         assembledBatteries: Array.from(cache.assembledBatteries.values()),
         customers: Array.from(cache.customers.values()),
-        backups: Array.from(cache.backups.values()),
     };
     
     const backupRef = doc(db, "backups", backupId);
@@ -288,8 +288,8 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const assembledBatteries = useMemo(() => Array.from(cache.assembledBatteries.values()), [cache.assembledBatteries]);
   const customers = useMemo(() => Array.from(cache.customers.values()), [cache.customers]);
   const backups = useMemo(() => Array.from(cache.backups.values()).sort((a,b) => {
-    if (!a.createdAt) return -1;
-    if (!b.createdAt) return 1;
+    if (!a.createdAt) return 1;
+    if (!b.createdAt) return -1;
     return b.createdAt.toMillis() - a.createdAt.toMillis()
   }), [cache.backups]);
 
@@ -301,11 +301,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
       items.forEach(item => {
         let match: InventoryItem | undefined;
+        // Simplified merging logic
         for (const existing of newCache.inventory.values()) {
-            if (existing.itemStdCode === item.itemStdCode &&
-                existing.itemStatus === 'In Stock' &&
-                existing.productDetails === (item.productDetails || '') &&
-                existing.purchaseInvoiceNumber === item.purchaseInvoiceNumber) {
+            if (existing.itemStdCode === item.itemStdCode && existing.itemStatus === 'In Stock') {
                 match = existing;
                 break;
             }
@@ -356,10 +354,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
         let match: InventoryItem | undefined;
         for (const existing of newCache.inventory.values()) {
-            if (existing.itemStdCode === updatedItemData.itemStdCode &&
-                existing.itemStatus === updatedItemData.itemStatus &&
-                existing.productDetails === (updatedItemData.productDetails || '') &&
-                existing.purchaseInvoiceNumber === updatedItemData.purchaseInvoiceNumber) {
+            if (existing.itemStdCode === updatedItemData.itemStdCode && existing.itemStatus === 'In Stock') {
                 match = existing;
                 break;
             }
@@ -788,7 +783,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             }
         });
 
-        if (prevCache.backups) {
+        if (prevCache.backups && prevCache.backups.size > 0) {
             prevCache.backups.forEach((_, id) => {
                 newChanges.push({ type: 'delete', collection: 'backups', id });
             })
@@ -960,9 +955,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    
-
-    
-
-    
