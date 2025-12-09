@@ -299,6 +299,26 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           return value.includes(row.getValue(id));
         },
       },
+       {
+        accessorKey: "itemStdCode",
+        header: "Item Code",
+        enableHiding: true,
+      },
+      {
+        accessorKey: "purchaseInvoiceNumber",
+        header: "Purchase Invoice",
+        enableHiding: true,
+      },
+       {
+        accessorKey: "salesInvoiceNumber",
+        header: "Sales Invoice",
+        enableHiding: true,
+      },
+       {
+        accessorKey: "vendorName",
+        header: "Vendor",
+        enableHiding: true,
+      },
       {
         accessorKey: "salesDate",
         header: "Date Sold",
@@ -353,7 +373,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
             });
           };
           
-          if (SOLD_STATUSES.includes(item.itemStatus as any)) {
+          if (SOLD_STATUSES.includes(item.itemStatus as any) || item.itemCategory === 'Assembled Vehicle' || item.itemCategory === 'Assembled Battery') {
             return (
               <AlertDialog>
                 <DropdownMenu>
@@ -378,9 +398,9 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
                 </DropdownMenu>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Sold Item?</AlertDialogTitle>
+                    <AlertDialogTitle>Delete Sold/Assembled Item?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Do you want to restock the parts from this item back into inventory (useful for returns), or just delete the sale record?
+                      Do you want to restock the parts from this item back into inventory (useful for returns/disassembly), or just delete the record?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

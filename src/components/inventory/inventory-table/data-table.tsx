@@ -11,6 +11,7 @@ import {
   getSortedRowModel,
   getFilteredRowModel,
   useReactTable,
+  getGlobalFilteredRowModel,
   type ColumnFiltersState,
   type SortingState,
   type VisibilityState,
@@ -71,10 +72,10 @@ export function DataTable<TData extends InventoryItem, TValue>({
   
   const initialFilters: ColumnFiltersState = [];
   if (statusFilterFromURL) {
-    initialFilters.push({ id: 'itemStatus', value: statusFilterFromURL });
+    initialFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
   }
   if (categoryFilterFromURL) {
-    initialFilters.push({ id: 'itemCategory', value: categoryFilterFromURL });
+    initialFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
   }
 
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
@@ -97,9 +98,11 @@ export function DataTable<TData extends InventoryItem, TValue>({
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    getGlobalFilteredRowModel: getGlobalFilteredRowModel(), 
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    globalFilterFn: 'auto',
     state: {
       sorting,
       columnFilters,
@@ -121,7 +124,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
     setIsAlertOpen(false);
   };
   
-  const selectedRowsContainAssembled = table.getFilteredSelectedRowModel().rows.some(row => row.original.itemCategory === 'Assembled Vehicle');
+  const selectedRowsContainAssembled = table.getFilteredSelectedRowModel().rows.some(row => row.original.itemCategory === 'Assembled Vehicle' || row.original.itemCategory === 'Assembled Battery');
   
   const selectAllFilteredRows = () => {
     const filteredRowIds = table.getFilteredRowModel().rows.reduce((acc, row) => {
@@ -135,7 +138,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center p-4 gap-4 flex-wrap">
         <Input
-          placeholder="Filter by name, code, invoice..."
+          placeholder="Search by name, code, invoice..."
           value={globalFilter ?? ""}
           onChange={(event) =>
             setGlobalFilter(event.target.value)
@@ -160,7 +163,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
                         <AlertDialogTitle>Delete Selected Items?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This will permanently delete the selected items.
-                            {selectedRowsContainAssembled && " For assembled vehicles, you can choose to restock their parts."}
+                            {selectedRowsContainAssembled && " For assembled items, you can choose to restock their parts."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -179,8 +182,8 @@ export function DataTable<TData extends InventoryItem, TValue>({
         )}
         <div className="flex gap-2 ml-auto">
             <Select
-                value={(table.getColumn("itemCategory")?.getFilterValue() as string) ?? ""}
-                onValueChange={(value) => table.getColumn("itemCategory")?.setFilterValue(value === "all" ? "" : value)}
+                value={(table.getColumn("itemCategory")?.getFilterValue() as string[])?.[0] ?? ""}
+                onValueChange={(value) => table.getColumn("itemCategory")?.setFilterValue(value === "all" ? null : [value])}
             >
                 <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by category" />
@@ -192,8 +195,8 @@ export function DataTable<TData extends InventoryItem, TValue>({
             </Select>
 
             <Select
-                value={(table.getColumn("itemStatus")?.getFilterValue() as string) ?? ""}
-                onValueChange={(value) => table.getColumn("itemStatus")?.setFilterValue(value === "all" ? "" : value)}
+                value={(table.getColumn("itemStatus")?.getFilterValue() as string[])?.[0] ?? ""}
+                onValueChange={(value) => table.getColumn("itemStatus")?.setFilterValue(value === "all" ? null : [value])}
             >
                 <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by status" />
@@ -222,7 +225,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
                         column.toggleVisibility(!!value)
                         }
                     >
-                        {column.id}
+                        {column.id === 'id' ? 'S.No' : column.id}
                     </DropdownMenuCheckboxItem>
                     );
                 })}
