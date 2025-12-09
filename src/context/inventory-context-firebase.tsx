@@ -43,6 +43,7 @@ import type {
   AllData,
 } from '@/lib/types';
 import { SOLD_STATUSES } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface SaleData {
@@ -140,6 +141,7 @@ const InventoryContext = createContext<InventoryContextType | undefined>(
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const db = useFirestore();
   const auth = useAuth();
+  const { toast } = useToast();
 
   const [assemblyQueue, setAssemblyQueue] = useState<AssemblyRequest[]>([]);
   const [isProcessingAssembly, setIsProcessingAssembly] = useState(false);
@@ -388,48 +390,80 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
     if (!db) return;
   
-    const vehicleRef = doc(db, 'assembledVehicles', id);
-    const vehicleSnap = await getDoc(vehicleRef);
-    if (!vehicleSnap.exists()) throw new Error("Assembled vehicle not found.");
-    const vehicle = vehicleSnap.data() as AssembledVehicle;
+    try {
+      const vehicleRef = doc(db, 'assembledVehicles', id);
+      const vehicleSnap = await getDoc(vehicleRef);
+      if (!vehicleSnap.exists()) throw new Error("Assembled vehicle not found.");
+      const vehicle = vehicleSnap.data() as AssembledVehicle;
   
-    const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
-    const inventorySnapshot = await getDocs(inventoryItemQuery);
-    const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
+      const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-V-${vehicle.chassisNumber}`), limit(1));
+      const inventorySnapshot = await getDocs(inventoryItemQuery);
+      const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
-    const partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
-    if (restock) {
-      const model = getVehicleModel(vehicle.modelId);
-      if (model?.parts) {
+      const partOps: { ref: DocumentReference; quantityToAdd: number; isNew?: boolean, data?: Omit<InventoryItem, 'id'> }[] = [];
+  
+      if (restock) {
+        const model = getVehicleModel(vehicle.modelId);
+        if (!model?.parts) throw new Error("Vehicle model or parts definition not found for restocking.");
+        
         for (const part of model.parts) {
           const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode));
           const partSnapshot = await getDocs(partQuery);
+          
           if (!partSnapshot.empty) {
-            partRefsToUpdate.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
+            partOps.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
+          } else {
+             const newPartRef = doc(collection(db, 'inventory'));
+             const newPartData: Omit<InventoryItem, 'id'> = {
+                itemStdCode: part.itemStdCode,
+                productName: `Restocked - ${part.itemStdCode}`,
+                itemCategory: 'Vehicle Part',
+                quantity: 0, // Will be updated in transaction
+                unitPrice: 0,
+                purchasePrice: 0,
+                itemStatus: 'In Stock',
+                vendorName: 'Restocked',
+                purchaseInvoiceNumber: 'RESTOCK',
+                storageLocation: 'Default',
+                purchaseDate: serverTimestamp() as Timestamp,
+                productDetails: '',
+             };
+             partOps.push({ ref: newPartRef, quantityToAdd: part.quantity, isNew: true, data: newPartData });
           }
         }
       }
-    }
   
-    await runTransaction(db, async (transaction) => {
-      if (restock) {
-        for (const { ref, quantityToAdd } of partRefsToUpdate) {
-            const partDoc = await transaction.get(ref);
-            if (partDoc.exists()) {
-                const currentQuantity = partDoc.data().quantity || 0;
-                transaction.update(ref, {
-                    quantity: currentQuantity + quantityToAdd,
-                    itemStatus: 'In Stock'
-                });
+      await runTransaction(db, async (transaction) => {
+        if (restock) {
+          for (const op of partOps) {
+            if (op.isNew) {
+                transaction.set(op.ref, { ...op.data, quantity: op.quantityToAdd });
+            } else {
+                const partDoc = await transaction.get(op.ref);
+                if (partDoc.exists()) {
+                    const currentQuantity = partDoc.data().quantity || 0;
+                    transaction.update(op.ref, {
+                        quantity: currentQuantity + op.quantityToAdd,
+                        itemStatus: 'In Stock'
+                    });
+                }
             }
+          }
         }
-      }
-  
-      if (inventoryItemRef) {
-        transaction.delete(inventoryItemRef);
-      }
-      transaction.delete(vehicleRef);
-    });
+    
+        if (inventoryItemRef) {
+          transaction.delete(inventoryItemRef);
+        }
+        transaction.delete(vehicleRef);
+      });
+    } catch(error: any) {
+        console.error("Failed to delete and restock vehicle:", error);
+        toast({
+            variant: "destructive",
+            title: "Operation Failed",
+            description: error.message || "Could not delete the assembled vehicle."
+        })
+    }
   };
   
   const addBatteryModel = async (model: Omit<BatteryModel, 'id'>) => {
@@ -446,49 +480,81 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteAssembledBattery = async (id: string, restock: boolean = false) => {
     if (!db) return;
-  
-    const batteryRef = doc(db, 'assembledBatteries', id);
-    const batterySnap = await getDoc(batteryRef);
-    if (!batterySnap.exists()) throw new Error("Assembled battery not found.");
-    const battery = batterySnap.data() as AssembledBattery;
-  
-    const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
-    const inventorySnapshot = await getDocs(inventoryItemQuery);
-    const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
-  
-    const partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
-    if (restock) {
-      const model = getBatteryModel(battery.modelId);
-      if (model?.parts) {
-        for (const part of model.parts) {
-          const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode));
-          const partSnapshot = await getDocs(partQuery);
-          if (!partSnapshot.empty) {
-            partRefsToUpdate.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
-          }
-        }
-      }
-    }
-  
-    await runTransaction(db, async (transaction) => {
-      if (restock) {
-        for (const { ref, quantityToAdd } of partRefsToUpdate) {
-            const partDoc = await transaction.get(ref);
-            if (partDoc.exists()) {
-                const currentQuantity = partDoc.data().quantity || 0;
-                transaction.update(ref, {
-                    quantity: currentQuantity + quantityToAdd,
-                    itemStatus: 'In Stock'
-                });
+
+    try {
+        const batteryRef = doc(db, 'assembledBatteries', id);
+        const batterySnap = await getDoc(batteryRef);
+        if (!batterySnap.exists()) throw new Error("Assembled battery not found.");
+        const battery = batterySnap.data() as AssembledBattery;
+
+        const inventoryItemQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', `ASM-B-${battery.serialNumber}`), limit(1));
+        const inventorySnapshot = await getDocs(inventoryItemQuery);
+        const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
+
+        const partOps: { ref: DocumentReference; quantityToAdd: number; isNew?: boolean, data?: Omit<InventoryItem, 'id'> }[] = [];
+
+        if (restock) {
+            const model = getBatteryModel(battery.modelId);
+            if (!model?.parts) throw new Error("Battery model or parts definition not found for restocking.");
+
+            for (const part of model.parts) {
+                const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode));
+                const partSnapshot = await getDocs(partQuery);
+                
+                if (!partSnapshot.empty) {
+                    partOps.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
+                } else {
+                    const newPartRef = doc(collection(db, 'inventory'));
+                    const newPartData: Omit<InventoryItem, 'id'> = {
+                        itemStdCode: part.itemStdCode,
+                        productName: `Restocked - ${part.itemStdCode}`,
+                        itemCategory: 'Battery Part',
+                        quantity: 0,
+                        unitPrice: 0,
+                        purchasePrice: 0,
+                        itemStatus: 'In Stock',
+                        vendorName: 'Restocked',
+                        purchaseInvoiceNumber: 'RESTOCK',
+                        storageLocation: 'Default',
+                        purchaseDate: serverTimestamp() as Timestamp,
+                        productDetails: '',
+                    };
+                    partOps.push({ ref: newPartRef, quantityToAdd: part.quantity, isNew: true, data: newPartData });
+                }
             }
         }
-      }
-  
-      if (inventoryItemRef) {
-        transaction.delete(inventoryItemRef);
-      }
-      transaction.delete(batteryRef);
-    });
+
+        await runTransaction(db, async (transaction) => {
+            if (restock) {
+                for (const op of partOps) {
+                    if (op.isNew) {
+                         transaction.set(op.ref, { ...op.data, quantity: op.quantityToAdd });
+                    } else {
+                        const partDoc = await transaction.get(op.ref);
+                        if (partDoc.exists()) {
+                            const currentQuantity = partDoc.data().quantity || 0;
+                            transaction.update(op.ref, {
+                                quantity: currentQuantity + op.quantityToAdd,
+                                itemStatus: 'In Stock'
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (inventoryItemRef) {
+                transaction.delete(inventoryItemRef);
+            }
+            transaction.delete(batteryRef);
+        });
+    } catch (error: any) {
+        console.error("Failed to delete and restock battery:", error);
+        toast({
+            variant: "destructive",
+            title: "Operation Failed",
+            description: error.message || "Could not delete the assembled battery."
+        });
+    }
   };
   
   const addCustomer = async (customer: Omit<Customer, 'id'>, id?: string) => {
@@ -648,55 +714,51 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const assemblyTimestamp = Timestamp.now();
         await runTransaction(db, async (transaction) => {
             let model: VehicleModel | BatteryModel | undefined;
-            let parts: { itemStdCode: string; quantity: number }[] = [];
             
             if (request.type === 'vehicle') {
               model = getVehicleModel(request.data.modelId);
-              parts = model?.parts || [];
             } else {
               model = getBatteryModel(request.data.modelId);
-              parts = model?.parts || [];
             }
     
             if (!model) throw new Error("Assembly model not found.");
+            const parts = model.parts || [];
     
-            // Perform all reads first
             const partDocsToUpdate = [];
             for (const part of parts) {
                 const itemQuery = query(
                     getCollectionRef('inventory'),
                     where('itemStdCode', '==', part.itemStdCode),
-                    where('itemStatus', '==', 'In Stock')
                 );
                 const snapshot = await getDocs(itemQuery);
-                if (snapshot.empty) {
-                    throw new Error(`Part ${part.itemStdCode} not found in inventory or is not 'In Stock'.`);
-                }
-                
-                let required = part.quantity;
-                let foundQuantity = 0;
-                for (const docSnap of snapshot.docs) {
-                    if (required <= 0) break;
+
+                let totalAvailable = 0;
+                let docsForPart: { ref: DocumentReference, data: InventoryItem }[] = [];
+                snapshot.forEach(docSnap => {
                     const itemData = docSnap.data() as InventoryItem;
-                    foundQuantity += itemData.quantity;
-                    const take = Math.min(itemData.quantity, required);
-                    partDocsToUpdate.push({ ref: docSnap.ref, requiredQuantity: take, currentQuantity: itemData.quantity, unitPrice: itemData.unitPrice });
-                    required -= take;
+                    if (itemData.itemStatus === 'In Stock') {
+                       totalAvailable += itemData.quantity;
+                       docsForPart.push({ ref: docSnap.ref, data: itemData });
+                    }
+                });
+
+                if (totalAvailable < part.quantity) {
+                    throw new Error(`Insufficient stock for ${part.itemStdCode}. Available: ${totalAvailable}, Required: ${part.quantity}`);
                 }
 
-                if (required > 0) {
-                     throw new Error(`Insufficient stock for ${part.itemStdCode}. Available: ${foundQuantity}, Required: ${part.quantity}`);
+                let required = part.quantity;
+                for (const docInfo of docsForPart) {
+                    if (required <= 0) break;
+                    const take = Math.min(docInfo.data.quantity, required);
+                    partDocsToUpdate.push({ ref: docInfo.ref, requiredQuantity: take, currentQuantity: docInfo.data.quantity, unitPrice: docInfo.data.unitPrice });
+                    required -= take;
                 }
             }
 
-            // Perform all writes
             for (const partDoc of partDocsToUpdate) {
                 const newQuantity = partDoc.currentQuantity - partDoc.requiredQuantity;
-                 if (newQuantity > 0) {
-                    transaction.update(partDoc.ref, { quantity: newQuantity });
-                } else {
-                     transaction.update(partDoc.ref, { quantity: 0, itemStatus: 'Out of Stock' });
-                }
+                const newStatus: ItemStatus = newQuantity > 0 ? 'In Stock' : 'Out of Stock';
+                transaction.update(partDoc.ref, { quantity: newQuantity, itemStatus: newStatus });
             }
   
             if (request.type === 'vehicle') {
@@ -834,7 +896,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       addCustomer,
       addBatchCustomers,
       updateCustomer,
-      deleteCustomer, 
+      deleteCustomer,
       processSale, 
       clearAllData, 
       restoreAllData,
