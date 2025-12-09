@@ -79,7 +79,7 @@ export function ProductionSummary() {
       </CardHeader>
       <CardContent>
         {productionStats.length > 0 ? (
-          <ScrollArea className="h-80 pr-4">
+          <ScrollArea className="pr-4">
             <div className="space-y-4">
               <TooltipProvider>
                 {productionStats.map((stats, index) => (

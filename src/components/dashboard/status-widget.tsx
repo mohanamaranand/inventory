@@ -60,7 +60,7 @@ export function StatusWidget() {
       </CardHeader>
       <CardContent>
         {statusCounts.length > 0 ? (
-          <ScrollArea className="h-64 pr-4">
+          <ScrollArea className="pr-4">
             <div className="space-y-2">
               {statusCounts.map(({ status, count }) => (
                 <Link
