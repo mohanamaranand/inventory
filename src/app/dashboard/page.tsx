@@ -12,14 +12,14 @@ function DashboardPageContent() {
     return (
         <>
             <Header title="Dashboard" />
-            <div className="space-y-8">
+            <div className="space-y-4">
                 <StatsCards />
-                <div className="grid gap-8 lg:grid-cols-3">
-                    <div className="lg:col-span-2 space-y-8">
-                        <SalesPurchasesChart />
-                        <ProductionSummary />
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                    <div className="col-span-1 lg:col-span-4 space-y-4">
+                       <SalesPurchasesChart />
+                       <ProductionSummary />
                     </div>
-                    <div className="grid gap-8 lg:col-start-3 lg:row-start-2">
+                     <div className="col-span-1 lg:col-span-3 space-y-4">
                         <StatusWidget />
                         <CategoryWidget />
                     </div>
@@ -40,7 +40,7 @@ export default function DashboardPage() {
 
 function DashboardLoadingSkeleton() {
     return (
-        <div className="space-y-8">
+        <div className="space-y-4">
             <Header title="Dashboard" />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Skeleton className="h-28" />
@@ -48,14 +48,14 @@ function DashboardLoadingSkeleton() {
                 <Skeleton className="h-28" />
                 <Skeleton className="h-28" />
             </div>
-             <div className="grid gap-8 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-8">
+             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                <div className="lg:col-span-4 space-y-4">
+                    <Skeleton className="h-96" />
                     <Skeleton className="h-80" />
-                    <Skeleton className="h-64" />
                 </div>
-                <div className="space-y-8">
-                    <Skeleton className="h-40" />
-                    <Skeleton className="h-40" />
+                <div className="lg:col-span-3 space-y-4">
+                    <Skeleton className="h-64" />
+                    <Skeleton className="h-64" />
                 </div>
             </div>
         </div>

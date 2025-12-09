@@ -124,7 +124,7 @@ export function SalesPurchasesChart() {
   return (
     <Card className="shadow-md">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
                 <CardTitle>Sales & Purchases Overview</CardTitle>
                 <CardDescription>{description[view]}</CardDescription>
@@ -137,7 +137,7 @@ export function SalesPurchasesChart() {
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
           <BarChart data={chartData} accessibilityLayer>
             <CartesianGrid vertical={false} />
             <XAxis
@@ -152,6 +152,7 @@ export function SalesPurchasesChart() {
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
+                width={80}
             />
             <ChartTooltip
               content={

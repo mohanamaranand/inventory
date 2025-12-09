@@ -70,16 +70,16 @@ export function ProductionSummary() {
   }, [vehicleModels, batteryModels, assembledVehicles, assembledBatteries, getItemByStdCode, getVehicleModel, getBatteryModel]);
 
   return (
-    <Card className="shadow-md flex flex-col">
+    <Card className="shadow-md">
       <CardHeader>
         <CardTitle>Production Summary</CardTitle>
         <CardDescription>
           Buildable vs. Assembled counts for each model based on current inventory.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow">
+      <CardContent>
         {productionStats.length > 0 ? (
-          <ScrollArea className="h-full pr-4">
+          <ScrollArea className="h-80 pr-4">
             <div className="space-y-4">
               <TooltipProvider>
                 {productionStats.map((stats, index) => (
