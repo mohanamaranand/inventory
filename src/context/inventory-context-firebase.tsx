@@ -388,7 +388,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteAssembledVehicle = async (id: string, restock: boolean = false) => {
     if (!db) return;
   
-    // ===== PRE-TRANSACTION READS =====
     const vehicleRef = doc(db, 'assembledVehicles', id);
     const vehicleSnap = await getDoc(vehicleRef);
     if (!vehicleSnap.exists()) throw new Error("Assembled vehicle not found.");
@@ -398,12 +397,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
-    let partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
+    const partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
     if (restock) {
       const model = getVehicleModel(vehicle.modelId);
       if (model?.parts) {
         for (const part of model.parts) {
-          const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+          const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode));
           const partSnapshot = await getDocs(partQuery);
           if (!partSnapshot.empty) {
             partRefsToUpdate.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
@@ -412,18 +411,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   
-    // ===== TRANSACTION =====
     await runTransaction(db, async (transaction) => {
       if (restock) {
         for (const { ref, quantityToAdd } of partRefsToUpdate) {
-          const partDoc = await transaction.get(ref);
-          if (partDoc.exists()) {
-            const currentQuantity = partDoc.data().quantity || 0;
-            transaction.update(ref, { 
-                quantity: currentQuantity + quantityToAdd,
-                itemStatus: 'In Stock'
-            });
-          }
+            const partDoc = await transaction.get(ref);
+            if (partDoc.exists()) {
+                const currentQuantity = partDoc.data().quantity || 0;
+                transaction.update(ref, {
+                    quantity: currentQuantity + quantityToAdd,
+                    itemStatus: 'In Stock'
+                });
+            }
         }
       }
   
@@ -449,7 +447,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteAssembledBattery = async (id: string, restock: boolean = false) => {
     if (!db) return;
   
-    // ===== PRE-TRANSACTION READS =====
     const batteryRef = doc(db, 'assembledBatteries', id);
     const batterySnap = await getDoc(batteryRef);
     if (!batterySnap.exists()) throw new Error("Assembled battery not found.");
@@ -459,12 +456,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const inventorySnapshot = await getDocs(inventoryItemQuery);
     const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
   
-    let partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
+    const partRefsToUpdate: { ref: DocumentReference; quantityToAdd: number }[] = [];
     if (restock) {
       const model = getBatteryModel(battery.modelId);
       if (model?.parts) {
         for (const part of model.parts) {
-          const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+          const partQuery = query(getCollectionRef('inventory'), where('itemStdCode', '==', part.itemStdCode));
           const partSnapshot = await getDocs(partQuery);
           if (!partSnapshot.empty) {
             partRefsToUpdate.push({ ref: partSnapshot.docs[0].ref, quantityToAdd: part.quantity });
@@ -473,18 +470,17 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   
-    // ===== TRANSACTION =====
     await runTransaction(db, async (transaction) => {
       if (restock) {
         for (const { ref, quantityToAdd } of partRefsToUpdate) {
-          const partDoc = await transaction.get(ref);
-          if (partDoc.exists()) {
-            const currentQuantity = partDoc.data().quantity || 0;
-            transaction.update(ref, { 
-                quantity: currentQuantity + quantityToAdd,
-                itemStatus: 'In Stock'
-            });
-          }
+            const partDoc = await transaction.get(ref);
+            if (partDoc.exists()) {
+                const currentQuantity = partDoc.data().quantity || 0;
+                transaction.update(ref, {
+                    quantity: currentQuantity + quantityToAdd,
+                    itemStatus: 'In Stock'
+                });
+            }
         }
       }
   
@@ -647,9 +643,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     const processQueue = async () => {
       setIsProcessingAssembly(true);
       const request = assemblyQueue[0];
-      const assemblyTimestamp = Timestamp.now();
-
+      
       try {
+        const assemblyTimestamp = Timestamp.now();
         await runTransaction(db, async (transaction) => {
             let model: VehicleModel | BatteryModel | undefined;
             let parts: { itemStdCode: string; quantity: number }[] = [];
@@ -670,29 +666,36 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const itemQuery = query(
                     getCollectionRef('inventory'),
                     where('itemStdCode', '==', part.itemStdCode),
-                    where('itemStatus', '==', 'In Stock'),
-                    limit(1)
+                    where('itemStatus', '==', 'In Stock')
                 );
                 const snapshot = await getDocs(itemQuery);
                 if (snapshot.empty) {
                     throw new Error(`Part ${part.itemStdCode} not found in inventory or is not 'In Stock'.`);
                 }
-                const docSnap = snapshot.docs[0];
-                const itemData = docSnap.data() as InventoryItem;
-
-                if (itemData.quantity < part.quantity) {
-                    throw new Error(`Insufficient stock for ${itemData.productName} (${itemData.itemStdCode}).`);
+                
+                let required = part.quantity;
+                let foundQuantity = 0;
+                for (const docSnap of snapshot.docs) {
+                    if (required <= 0) break;
+                    const itemData = docSnap.data() as InventoryItem;
+                    foundQuantity += itemData.quantity;
+                    const take = Math.min(itemData.quantity, required);
+                    partDocsToUpdate.push({ ref: docSnap.ref, requiredQuantity: take, currentQuantity: itemData.quantity, unitPrice: itemData.unitPrice });
+                    required -= take;
                 }
-                partDocsToUpdate.push({ ref: docSnap.ref, requiredQuantity: part.quantity, currentQuantity: itemData.quantity, unitPrice: itemData.unitPrice });
+
+                if (required > 0) {
+                     throw new Error(`Insufficient stock for ${part.itemStdCode}. Available: ${foundQuantity}, Required: ${part.quantity}`);
+                }
             }
 
             // Perform all writes
             for (const partDoc of partDocsToUpdate) {
                 const newQuantity = partDoc.currentQuantity - partDoc.requiredQuantity;
-                if (newQuantity > 0) {
+                 if (newQuantity > 0) {
                     transaction.update(partDoc.ref, { quantity: newQuantity });
                 } else {
-                    transaction.update(partDoc.ref, { quantity: 0, itemStatus: 'Out of Stock' });
+                     transaction.update(partDoc.ref, { quantity: 0, itemStatus: 'Out of Stock' });
                 }
             }
   
@@ -830,13 +833,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       deleteAssembledBattery, 
       addCustomer,
       addBatchCustomers,
-      updateCustomer, 
+      updateCustomer,
       deleteCustomer, 
       processSale, 
       clearAllData, 
       restoreAllData,
       deleteCurrentUser,
-      assembleVehicle,
     ]
   );
 
