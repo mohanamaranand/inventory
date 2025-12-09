@@ -46,7 +46,7 @@ export function CategoryWidget() {
   }, [inventory]);
 
   return (
-    <Card className="shadow-md h-full">
+    <Card className="shadow-md">
       <CardHeader>
         <CardTitle>Inventory by Category</CardTitle>
         <CardDescription>
@@ -55,7 +55,7 @@ export function CategoryWidget() {
       </CardHeader>
       <CardContent>
         {categoryStats.length > 0 ? (
-          <ScrollArea className="h-64 pr-4">
+          <ScrollArea className="h-80 pr-4">
             <div className="space-y-4">
               <TooltipProvider>
                 {categoryStats.map(({ category, unitCount, itemCount }, index) => (
