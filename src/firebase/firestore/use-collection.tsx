@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -102,7 +103,7 @@ export function useCollection<T = any>(
     const unsubscribe = onSnapshot(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
-        const results: ResultItemType[] = snapshot.docs.map(doc => {
+        const results = snapshot.docs.map(doc => {
           const docData = doc.data();
           const convertedData = convertTimestampsToDates(docData);
           return { ...(convertedData as T), id: doc.id };
@@ -139,3 +140,4 @@ export function useCollection<T = any>(
   }
   return { data, isLoading, error };
 }
+
