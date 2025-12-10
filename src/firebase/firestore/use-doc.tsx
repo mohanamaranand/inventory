@@ -37,7 +37,7 @@ const convertTimestampsToDates = (data: any): any => {
         return data.map(item => convertTimestampsToDates(item));
     }
 
-    if (typeof data === 'object') {
+    if (typeof data === 'object' && data !== null) {
         const newObj: { [key: string]: any } = {};
         for (const key in data) {
             if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -70,7 +70,7 @@ export function useDoc<T = any>(
   type StateDataType = WithId<T> | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
@@ -83,7 +83,6 @@ export function useDoc<T = any>(
 
     setIsLoading(true);
     setError(null);
-    // Optional: setData(null); // Clear previous data instantly
 
     const unsubscribe = onSnapshot(
       memoizedDocRef,
@@ -93,10 +92,9 @@ export function useDoc<T = any>(
           const convertedData = convertTimestampsToDates(docData);
           setData({ ...(convertedData as T), id: snapshot.id });
         } else {
-          // Document does not exist
           setData(null);
         }
-        setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
+        setError(null);
         setIsLoading(false);
       },
       (error: FirestoreError) => {
@@ -109,13 +107,12 @@ export function useDoc<T = any>(
         setData(null)
         setIsLoading(false)
 
-        // trigger global error propagation
         errorEmitter.emit('permission-error', contextualError);
       }
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+  }, [memoizedDocRef]);
 
   return { data, isLoading, error };
 }
