@@ -219,8 +219,8 @@ function StatusCell({ row }: { row: { original: InventoryItem } }) {
 
 
 export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => {
-    const { user } = useUser();
-    const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+    const { user, loading } = useUser();
+    const isPrivilegedUser = !loading && (user?.role === 'owner' || user?.role === 'administrator');
 
     const allColumns: ColumnDef<InventoryItem>[] = [
       {

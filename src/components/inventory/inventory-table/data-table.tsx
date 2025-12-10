@@ -53,6 +53,8 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
   } from "@/components/ui/alert-dialog"
+import { useUser } from "@/firebase";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -64,6 +66,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
   data,
 }: DataTableProps<TData, TValue>) {
   const searchParams = useSearchParams();
+  const { user, loading: userLoading } = useUser();
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -111,10 +114,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
       newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
     }
 
-    // Only update if the filters from the URL are different from the current state
-    // This prevents unnecessary re-renders
     if (JSON.stringify(newFilters) !== JSON.stringify(columnFilters.filter(f => f.id === 'itemStatus' || f.id === 'itemCategory'))) {
-      // Keep existing filters that are not from the URL
       const otherFilters = columnFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
       setColumnFilters([...otherFilters, ...newFilters]);
     }
@@ -142,6 +142,24 @@ export function DataTable<TData extends InventoryItem, TValue>({
     }, {} as Record<string, boolean>);
     table.setRowSelection(filteredRowIds);
   };
+  
+  if (userLoading) {
+      return (
+          <div className="space-y-4">
+              <div className="flex items-center p-4 gap-4 flex-wrap">
+                  <Skeleton className="h-10 w-full max-w-sm" />
+                  <div className="flex gap-2 ml-auto">
+                       <Skeleton className="h-10 w-[180px]" />
+                       <Skeleton className="h-10 w-[180px]" />
+                       <Skeleton className="h-10 w-24" />
+                  </div>
+              </div>
+              <div className="rounded-lg border">
+                <Skeleton className="h-96 w-full" />
+              </div>
+          </div>
+      )
+  }
 
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
