@@ -38,11 +38,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useUser } from "@/firebase/auth/use-user";
 import { Timestamp } from "firebase/firestore";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -51,6 +50,7 @@ import { Calendar, CalendarIcon, Loader2 } from "lucide-react";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
+  isPrivilegedUser: boolean;
 };
 
 // Extracted StatusCell component to correctly use hooks
@@ -218,9 +218,7 @@ function StatusCell({ row }: { row: { original: InventoryItem } }) {
 }
 
 
-export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => {
-    const { user, loading } = useUser();
-    const isPrivilegedUser = useMemo(() => !loading && (user?.role === 'owner' || user?.role === 'administrator'), [user, loading]);
+export const columns = ({ onEdit, isPrivilegedUser }: ColumnsProps): ColumnDef<InventoryItem>[] => {
 
     const allColumns: ColumnDef<InventoryItem>[] = [
       {

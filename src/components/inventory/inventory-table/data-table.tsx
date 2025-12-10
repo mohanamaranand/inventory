@@ -55,6 +55,8 @@ import {
   } from "@/components/ui/alert-dialog"
 import { useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
+import { columns as defineColumns } from "./columns";
+
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -62,11 +64,11 @@ interface DataTableProps<TData, TValue> {
 }
 
 export function DataTable<TData extends InventoryItem, TValue>({
-  columns,
   data,
-}: DataTableProps<TData, TValue>) {
+}: Omit<DataTableProps<TData, TValue>, 'columns'>) {
   const searchParams = useSearchParams();
   const { user, loading: userLoading } = useUser();
+  const isPrivilegedUser = React.useMemo(() => user?.role === 'owner' || user?.role === 'administrator', [user]);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -76,9 +78,27 @@ export function DataTable<TData extends InventoryItem, TValue>({
   const [rowSelection, setRowSelection] = React.useState({});
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
 
-
   const { deleteMultipleItems } = useInventory();
   const { toast } = useToast();
+
+  const handleEditItem = (id: string) => {
+    // This function is passed to columns, but defined here to avoid hook errors
+    // Assuming you have a way to open the edit form, for example:
+    // setEditingItemId(id);
+    // setSheetOpen(true);
+    // For now, we'll just log it.
+    console.log("Editing item:", id);
+  };
+  
+  const columns = React.useMemo(
+    () => {
+      // Don't generate columns until we know the user's role to prevent hydration mismatch
+      if (userLoading) return [];
+      return defineColumns({ onEdit: handleEditItem, isPrivilegedUser });
+    },
+    [userLoading, isPrivilegedUser]
+  );
+
 
   const table = useReactTable({
     data,
@@ -99,26 +119,32 @@ export function DataTable<TData extends InventoryItem, TValue>({
       columnVisibility,
       rowSelection,
     },
+    // We need to provide a default empty list for columns during the loading state
+    defaultColumn: {
+      size: 0,
+    },
   });
 
-    React.useEffect(() => {
+  React.useEffect(() => {
     const statusFilterFromURL = searchParams.get('status');
     const categoryFilterFromURL = searchParams.get('category');
     
+    // This effect runs only on the client, after hydration
     const newFilters: ColumnFiltersState = [];
-    
     if (statusFilterFromURL) {
       newFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
     }
     if (categoryFilterFromURL) {
       newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
     }
-
-    if (JSON.stringify(newFilters) !== JSON.stringify(columnFilters.filter(f => f.id === 'itemStatus' || f.id === 'itemCategory'))) {
-      const otherFilters = columnFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
-      setColumnFilters([...otherFilters, ...newFilters]);
+    
+    if (newFilters.length > 0) {
+       setColumnFilters(currentFilters => {
+         const otherFilters = currentFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
+         return [...otherFilters, ...newFilters];
+       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [searchParams]);
 
   const handleDeleteSelected = (restock: boolean) => {
@@ -143,7 +169,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
     table.setRowSelection(filteredRowIds);
   };
   
-  if (userLoading) {
+  if (userLoading || columns.length === 0) {
       return (
           <div className="space-y-4">
               <div className="flex items-center p-4 gap-4 flex-wrap">

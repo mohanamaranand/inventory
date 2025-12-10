@@ -168,7 +168,6 @@ export function InventoryClient() {
       />
 
       <DataTable
-        columns={columns({ onEdit: handleEditItem })}
         data={useInventory().inventory}
       />
     </>
