@@ -8,6 +8,7 @@ import {
   FirestoreError,
   QuerySnapshot,
   CollectionReference,
+  Timestamp,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -36,6 +37,32 @@ export interface InternalQuery extends Query<DocumentData> {
     }
   }
 }
+
+// Helper function to recursively convert Timestamps to Dates
+const convertTimestampsToDates = (data: any): any => {
+    if (!data) return data;
+
+    if (data instanceof Timestamp) {
+        return data.toDate();
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => convertTimestampsToDates(item));
+    }
+
+    if (typeof data === 'object') {
+        const newObj: { [key: string]: any } = {};
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                newObj[key] = convertTimestampsToDates(data[key]);
+            }
+        }
+        return newObj;
+    }
+
+    return data;
+};
+
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
@@ -78,7 +105,10 @@ export function useCollection<T = any>(
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
         for (const doc of snapshot.docs) {
-          results.push({ ...(doc.data() as T), id: doc.id });
+          const docData = doc.data();
+          // The conversion should happen here, inside the client-side effect.
+          const convertedData = convertTimestampsToDates(docData);
+          results.push({ ...(convertedData as T), id: doc.id });
         }
         setData(results);
         setError(null);
@@ -107,6 +137,7 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }

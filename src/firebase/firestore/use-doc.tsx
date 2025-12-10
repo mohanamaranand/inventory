@@ -7,6 +7,7 @@ import {
   DocumentData,
   FirestoreError,
   DocumentSnapshot,
+  Timestamp,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -23,6 +24,31 @@ export interface UseDocResult<T> {
   isLoading: boolean;       // True if loading.
   error: FirestoreError | Error | null; // Error object, or null.
 }
+
+// Helper function to recursively convert Timestamps to Dates
+const convertTimestampsToDates = (data: any): any => {
+    if (!data) return data;
+
+    if (data instanceof Timestamp) {
+        return data.toDate();
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => convertTimestampsToDates(item));
+    }
+
+    if (typeof data === 'object') {
+        const newObj: { [key: string]: any } = {};
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                newObj[key] = convertTimestampsToDates(data[key]);
+            }
+        }
+        return newObj;
+    }
+
+    return data;
+};
 
 /**
  * React hook to subscribe to a single Firestore document in real-time.
@@ -63,7 +89,9 @@ export function useDoc<T = any>(
       memoizedDocRef,
       (snapshot: DocumentSnapshot<DocumentData>) => {
         if (snapshot.exists()) {
-          setData({ ...(snapshot.data() as T), id: snapshot.id });
+          const docData = snapshot.data();
+          const convertedData = convertTimestampsToDates(docData);
+          setData({ ...(convertedData as T), id: snapshot.id });
         } else {
           // Document does not exist
           setData(null);

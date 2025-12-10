@@ -166,11 +166,11 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { data: assembledBatteriesData, isLoading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
   const { data: customersData, isLoading: loadingCustomers } = useCollection<Customer>(customersQuery);
 
-  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : item.purchaseDate, salesDate: item.salesDate instanceof Timestamp ? item.salesDate.toDate() : item.salesDate })), [inventoryData]);
+  const inventory = useMemo(() => inventoryData || [], [inventoryData]);
   const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
-  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledVehiclesData]);
+  const assembledVehicles = useMemo(() => assembledVehiclesData || [], [assembledVehiclesData]);
   const batteryModels = useMemo(() => batteryModelsData || [], [batteryModelsData]);
-  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledBatteriesData]);
+  const assembledBatteries = useMemo(() => assembledBatteriesData || [], [assembledBatteriesData]);
   const customers = useMemo(() => customersData || [], [customersData]);
 
 
@@ -658,7 +658,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 purchaseInvoiceNumber: 'ASSEMBLY',
                 vendorName: 'In-House',
                 storageLocation: 'Finished Goods',
-                purchaseDate: assemblyTimestamp,
+                purchaseDate: assemblyTimestamp.toDate(),
                 imageUrl: '',
                 purchasePrice: totalCost,
               };
@@ -685,7 +685,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 purchaseInvoiceNumber: 'ASSEMBLY',
                 vendorName: 'In-House',
                 storageLocation: 'Finished Goods',
-                purchaseDate: assemblyTimestamp,
+                purchaseDate: assemblyTimestamp.toDate(),
                 imageUrl: '',
                 purchasePrice: totalCost,
               };
