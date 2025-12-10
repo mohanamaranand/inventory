@@ -55,21 +55,21 @@ import {
   } from "@/components/ui/alert-dialog"
 import { useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
-import { columns as defineColumns } from "./columns";
+import { defineColumns } from "./columns";
 
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  onEdit: (id: string) => void;
 }
 
 export function DataTable<TData extends InventoryItem, TValue>({
   data,
-}: Omit<DataTableProps<TData, TValue>, 'columns'>) {
+  onEdit,
+}: DataTableProps<TData, TValue>) {
   const searchParams = useSearchParams();
   const { user, loading: userLoading } = useUser();
-  const isPrivilegedUser = React.useMemo(() => user?.role === 'owner' || user?.role === 'administrator', [user]);
-
+  
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -81,24 +81,12 @@ export function DataTable<TData extends InventoryItem, TValue>({
   const { deleteMultipleItems } = useInventory();
   const { toast } = useToast();
 
-  const handleEditItem = (id: string) => {
-    // This function is passed to columns, but defined here to avoid hook errors
-    // Assuming you have a way to open the edit form, for example:
-    // setEditingItemId(id);
-    // setSheetOpen(true);
-    // For now, we'll just log it.
-    console.log("Editing item:", id);
-  };
-  
-  const columns = React.useMemo(
-    () => {
-      // Don't generate columns until we know the user's role to prevent hydration mismatch
-      if (userLoading) return [];
-      return defineColumns({ onEdit: handleEditItem, isPrivilegedUser });
-    },
-    [userLoading, isPrivilegedUser]
-  );
+  const isPrivilegedUser = React.useMemo(() => user?.role === 'owner' || user?.role === 'administrator', [user]);
 
+  const columns = React.useMemo(() => {
+    if (userLoading) return [];
+    return defineColumns({ onEdit, isPrivilegedUser });
+  }, [isPrivilegedUser, onEdit, userLoading]);
 
   const table = useReactTable({
     data,
@@ -119,7 +107,6 @@ export function DataTable<TData extends InventoryItem, TValue>({
       columnVisibility,
       rowSelection,
     },
-    // We need to provide a default empty list for columns during the loading state
     defaultColumn: {
       size: 0,
     },
@@ -129,23 +116,22 @@ export function DataTable<TData extends InventoryItem, TValue>({
     const statusFilterFromURL = searchParams.get('status');
     const categoryFilterFromURL = searchParams.get('category');
     
-    // This effect runs only on the client, after hydration
-    const newFilters: ColumnFiltersState = [];
-    if (statusFilterFromURL) {
-      newFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
-    }
-    if (categoryFilterFromURL) {
-      newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
-    }
-    
-    if (newFilters.length > 0) {
-       setColumnFilters(currentFilters => {
-         const otherFilters = currentFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
-         return [...otherFilters, ...newFilters];
-       });
-    }
-
-  }, [searchParams]);
+    table.setColumnFilters(currentFilters => {
+        const newFilters = [];
+        if (statusFilterFromURL) {
+            newFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
+        }
+        if (categoryFilterFromURL) {
+            newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
+        }
+        
+        if (newFilters.length > 0) {
+            const otherFilters = currentFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
+            return [...otherFilters, ...newFilters];
+        }
+        return currentFilters;
+    });
+  }, [searchParams, table]);
 
   const handleDeleteSelected = (restock: boolean) => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;

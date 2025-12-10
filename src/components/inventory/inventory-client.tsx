@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Upload } from 'lucide-react';
 import { InventoryForm } from '@/components/inventory/inventory-form';
 import { DataTable } from '@/components/inventory/inventory-table/data-table';
-import { columns } from '@/components/inventory/inventory-table/columns';
 import { useToast } from '@/hooks/use-toast';
 import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
 
@@ -169,6 +168,7 @@ export function InventoryClient() {
 
       <DataTable
         data={useInventory().inventory}
+        onEdit={handleEditItem}
       />
     </>
   );
