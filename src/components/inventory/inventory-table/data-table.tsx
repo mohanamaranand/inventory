@@ -64,20 +64,9 @@ export function DataTable<TData extends InventoryItem, TValue>({
   data,
 }: DataTableProps<TData, TValue>) {
   const searchParams = useSearchParams();
-  const statusFilterFromURL = searchParams.get('status');
-  const categoryFilterFromURL = searchParams.get('category');
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  
-  const initialFilters: ColumnFiltersState = [];
-  if (statusFilterFromURL) {
-    initialFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
-  }
-  if (categoryFilterFromURL) {
-    initialFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
-  }
-
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -108,6 +97,29 @@ export function DataTable<TData extends InventoryItem, TValue>({
       rowSelection,
     },
   });
+
+    React.useEffect(() => {
+    const statusFilterFromURL = searchParams.get('status');
+    const categoryFilterFromURL = searchParams.get('category');
+    
+    const newFilters: ColumnFiltersState = [];
+    
+    if (statusFilterFromURL) {
+      newFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
+    }
+    if (categoryFilterFromURL) {
+      newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
+    }
+
+    // Only update if the filters from the URL are different from the current state
+    // This prevents unnecessary re-renders
+    if (JSON.stringify(newFilters) !== JSON.stringify(columnFilters.filter(f => f.id === 'itemStatus' || f.id === 'itemCategory'))) {
+      // Keep existing filters that are not from the URL
+      const otherFilters = columnFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
+      setColumnFilters([...otherFilters, ...newFilters]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleDeleteSelected = (restock: boolean) => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
