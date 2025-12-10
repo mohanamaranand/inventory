@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -220,7 +220,7 @@ function StatusCell({ row }: { row: { original: InventoryItem } }) {
 
 export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => {
     const { user, loading } = useUser();
-    const isPrivilegedUser = !loading && (user?.role === 'owner' || user?.role === 'administrator');
+    const isPrivilegedUser = useMemo(() => !loading && (user?.role === 'owner' || user?.role === 'administrator'), [user, loading]);
 
     const allColumns: ColumnDef<InventoryItem>[] = [
       {
@@ -292,6 +292,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           return <Badge variant="secondary">{row.original.itemCategory}</Badge>;
         },
         filterFn: (row, id, value) => {
+          if (!value || value.length === 0) return true;
           return value.includes(row.getValue(id));
         },
       },
@@ -300,6 +301,7 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
         header: "Status",
         cell: ({ row }) => <StatusCell row={row} />,
         filterFn: (row, id, value) => {
+          if (!value || value.length === 0) return true;
           return value.includes(row.getValue(id));
         },
       },

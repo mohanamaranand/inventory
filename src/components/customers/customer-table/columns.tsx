@@ -60,6 +60,7 @@ function ActionsCell({ row, onEdit, onViewPurchases }: { row: { original: Custom
   const customer = row.original;
 
   const handleDelete = () => {
+    if (!customer?.id) return;
     deleteCustomer(customer.id);
     toast({
       variant: "destructive",
@@ -78,10 +79,10 @@ function ActionsCell({ row, onEdit, onViewPurchases }: { row: { original: Custom
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => onViewPurchases(customer)}>
+        <DropdownMenuItem onClick={() => customer && onViewPurchases(customer)}>
           View Purchases
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onEdit(customer.id)}>
+        <DropdownMenuItem onClick={() => customer && onEdit(customer.id)}>
           Edit
         </DropdownMenuItem>
         <DropdownMenuSeparator />
