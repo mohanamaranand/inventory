@@ -218,7 +218,7 @@ function StatusCell({ row }: { row: { original: InventoryItem } }) {
 }
 
 
-export const columns = ({ onEdit, isPrivilegedUser }: ColumnsProps): ColumnDef<InventoryItem>[] => {
+export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): ColumnDef<InventoryItem>[] => {
 
     const allColumns: ColumnDef<InventoryItem>[] = [
       {
