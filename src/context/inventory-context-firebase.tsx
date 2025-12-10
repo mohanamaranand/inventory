@@ -465,44 +465,53 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [customers]);
 
   const processSale = useCallback(async (saleData: SaleData) => {
-      if (!db) return;
-      await runTransaction(db, async (transaction) => {
-          for (const saleItem of saleData.items) {
-              const itemRef = doc(db, 'inventory', saleItem.itemId);
-              const itemDoc = await transaction.get(itemRef);
-              if (!itemDoc.exists()) throw new Error(`Item with ID ${saleItem.itemId} not found.`);
+    if (!db) return;
+    await runTransaction(db, async (transaction) => {
+        const saleItemsInfo = [];
 
-              const currentItem = itemDoc.data() as InventoryItem;
-              if (currentItem.quantity < saleItem.quantity) {
-                  throw new Error(`Insufficient stock for ${currentItem.productName}.`);
-              }
+        // 1. All reads first
+        for (const saleItem of saleData.items) {
+            const itemRef = doc(db, 'inventory', saleItem.itemId);
+            const itemDoc = await transaction.get(itemRef);
+            if (!itemDoc.exists()) {
+                throw new Error(`Item with ID ${saleItem.itemId} not found.`);
+            }
+            const currentItem = itemDoc.data() as InventoryItem;
+            if (currentItem.quantity < saleItem.quantity) {
+                throw new Error(`Insufficient stock for ${currentItem.productName}.`);
+            }
+            saleItemsInfo.push({ ref: itemRef, doc: currentItem, sale: saleItem });
+        }
 
-              const newDocRef = doc(collection(db, 'inventory'));
-              const { id: originalId, ...itemDataToCopy } = currentItem;
-              
-              const saleStatus: ItemStatus = itemDataToCopy.itemCategory === 'Assembled Vehicle' || itemDataToCopy.itemCategory === 'Assembled Battery'
+        // 2. All writes second
+        for (const { ref, doc: currentItem, sale: saleItem } of saleItemsInfo) {
+            const newDocRef = doc(collection(db, 'inventory'));
+            const { id: originalId, ...itemDataToCopy } = currentItem;
+
+            const saleStatus: ItemStatus = itemDataToCopy.itemCategory === 'Assembled Vehicle' || itemDataToCopy.itemCategory === 'Assembled Battery'
                 ? 'Sold as vehicle'
                 : 'Sold as Spare';
 
-              transaction.set(newDocRef, {
-                  ...itemDataToCopy,
-                  quantity: saleItem.quantity,
-                  unitPrice: saleItem.unitPrice,
-                  itemStatus: saleStatus,
-                  salesInvoiceNumber: saleData.salesInvoiceNumber,
-                  salesDate: Timestamp.fromDate(saleData.date),
-                  customerId: saleData.customerId,
-              });
+            transaction.set(newDocRef, {
+                ...itemDataToCopy,
+                quantity: saleItem.quantity,
+                unitPrice: saleItem.unitPrice,
+                itemStatus: saleStatus,
+                salesInvoiceNumber: saleData.salesInvoiceNumber,
+                salesDate: Timestamp.fromDate(saleData.date),
+                customerId: saleData.customerId,
+            });
 
-              const remainingQuantity = currentItem.quantity - saleItem.quantity;
-              if (remainingQuantity > 0) {
-                transaction.update(itemRef, { quantity: remainingQuantity });
-              } else {
-                transaction.delete(itemRef);
-              }
-          }
-      });
-  }, [db]);
+            const remainingQuantity = currentItem.quantity - saleItem.quantity;
+            if (remainingQuantity > 0) {
+                transaction.update(ref, { quantity: remainingQuantity });
+            } else {
+                transaction.delete(ref);
+            }
+        }
+    });
+}, [db]);
+
 
   const clearAllData = useCallback(async () => {
     if (!db) return;
