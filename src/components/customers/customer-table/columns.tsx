@@ -162,3 +162,5 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
     cell: ({ row }) => <ActionsCell row={row} onEdit={onEdit} onViewPurchases={onViewPurchases} />,
   },
 ];
+
+    

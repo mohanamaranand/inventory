@@ -445,3 +445,5 @@ export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): Colum
 
     return allColumns;
 };
+
+    

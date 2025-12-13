@@ -69,7 +69,7 @@ export const columns: ColumnDef<InventoryItem>[] = [
       return <Badge variant="secondary">{row.original.itemCategory}</Badge>;
     },
     filterFn: (row, id, value) => {
-      if (!value || value.length === 0) return true;
+      if (!value || !Array.isArray(value) || value.length === 0) return true;
       return value.includes(row.getValue(id));
     },
   },
@@ -80,7 +80,7 @@ export const columns: ColumnDef<InventoryItem>[] = [
         return <Badge variant="outline">{row.original.itemStatus}</Badge>;
     },
     filterFn: (row, id, value) => {
-      if (!value || value.length === 0) return true;
+      if (!value || !Array.isArray(value) || value.length === 0) return true;
       return value.includes(row.getValue(id));
     }
   },
@@ -119,3 +119,5 @@ export const columns: ColumnDef<InventoryItem>[] = [
     }
   },
 ];
+
+    
