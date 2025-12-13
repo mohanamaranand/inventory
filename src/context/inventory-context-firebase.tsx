@@ -159,20 +159,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const assembledBatteriesQuery = useMemoFirebase(() => db ? collection(db, 'assembledBatteries') : null, [db]);
   const customersQuery = useMemoFirebase(() => db ? collection(db, 'customers') : null, [db]);
 
-  const { data: inventoryData, isLoading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
-  const { data: vehicleModelsData, isLoading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
-  const { data: assembledVehiclesData, isLoading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesQuery);
-  const { data: batteryModelsData, isLoading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
-  const { data: assembledBatteriesData, isLoading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
-  const { data: customersData, isLoading: loadingCustomers } = useCollection<Customer>(customersQuery);
-
-  const inventory = useMemo(() => (inventoryData || []).map(item => ({ ...item, purchaseDate: item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : item.purchaseDate, salesDate: item.salesDate instanceof Timestamp ? item.salesDate.toDate() : item.salesDate })), [inventoryData]);
-  const vehicleModels = useMemo(() => vehicleModelsData || [], [vehicleModelsData]);
-  const assembledVehicles = useMemo(() => (assembledVehiclesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledVehiclesData]);
-  const batteryModels = useMemo(() => batteryModelsData || [], [batteryModelsData]);
-  const assembledBatteries = useMemo(() => (assembledBatteriesData || []).map(item => ({ ...item, assemblyDate: item.assemblyDate instanceof Timestamp ? item.assemblyDate.toDate() : item.assemblyDate })), [assembledBatteriesData]);
-  const customers = useMemo(() => customersData || [], [customersData]);
-
+  const { data: inventory, isLoading: loadingInventory } = useCollection<InventoryItem>(inventoryQuery);
+  const { data: vehicleModels, isLoading: loadingVehicleModels } = useCollection<VehicleModel>(vehicleModelsQuery);
+  const { data: assembledVehicles, isLoading: loadingAssembledVehicles } = useCollection<AssembledVehicle>(assembledVehiclesQuery);
+  const { data: batteryModels, isLoading: loadingBatteryModels } = useCollection<BatteryModel>(batteryModelsQuery);
+  const { data: assembledBatteries, isLoading: loadingAssembledBatteries } = useCollection<AssembledBattery>(assembledBatteriesQuery);
+  const { data: customers, isLoading: loadingCustomers } = useCollection<Customer>(customersQuery);
 
   const loading =
     loadingInventory ||
@@ -182,7 +174,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     loadingAssembledBatteries ||
     loadingCustomers;
 
-  const getCollectionRef = (name: string) => collection(db, name);
+  const getCollectionRef = useCallback((name: string) => {
+      if (!db) throw new Error("Firestore is not initialized.");
+      return collection(db, name);
+  }, [db]);
 
   const findAndMergeItem = useCallback(async (transaction: any, itemPayload: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
@@ -265,13 +260,14 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [db, addItem]);
   
-  const updateItem = async (
+  const updateItem = useCallback(async (
     id: string,
     updatedItem: Partial<Omit<InventoryItem, 'id'>>
   ) => {
+    if (!db) return;
     const docRef = doc(db, 'inventory', id);
     await updateDoc(docRef, updatedItem);
-  };
+  }, [db]);
   
   const editAndMergeItem = useCallback(async (id: string, updatedItemData: Omit<InventoryItem, 'id'>) => {
     if (!db) return;
@@ -311,7 +307,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? itemToSplit.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber,
-            salesDate: splitItemData?.salesDate,
+            salesDate: splitItemData?.salesDate ? Timestamp.fromDate(splitItemData.salesDate) : undefined,
             purchaseDate: itemToSplit.purchaseDate,
         };
 
@@ -328,8 +324,24 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [db, findAndMergeItem]);
 
-  const deleteItem = async (id: string, restock: boolean = false) => {
-    if (!db) return;
+  const deleteAssembledVehicle = useCallback(async (id: string, restock: boolean = false) => {
+    setDeletionQueue(prev => [...prev, { type: 'vehicle', id, restock }]);
+    toast({
+        title: "Deletion Queued",
+        description: `Vehicle deletion has been added to the queue.`
+    });
+  }, [toast]);
+  
+  const deleteAssembledBattery = useCallback(async (id: string, restock: boolean = false) => {
+    setDeletionQueue(prev => [...prev, { type: 'battery', id, restock }]);
+    toast({
+        title: "Deletion Queued",
+        description: `Battery deletion has been added to the queue.`
+    });
+  }, [toast]);
+
+  const deleteItem = useCallback(async (id: string, restock: boolean = false) => {
+    if (!db || !inventory) return;
     const itemToDelete = inventory.find(item => item.id === id);
     if (!itemToDelete) return;
 
@@ -354,15 +366,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     } else {
       await deleteDoc(doc(db, 'inventory', id));
     }
-  };
+  }, [db, inventory, deleteAssembledVehicle, deleteAssembledBattery]);
   
-  const deleteMultipleItems = async (ids: string[], restock: boolean = false) => {
+  const deleteMultipleItems = useCallback(async (ids: string[], restock: boolean = false) => {
     for (const id of ids) {
         await deleteItem(id, restock);
     }
-  };
+  }, [deleteItem]);
 
   const deleteCurrentUser = useCallback(async () => {
+    if (!auth || !db) return;
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("No user is currently signed in.");
     
@@ -372,64 +385,61 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [auth, db]);
 
   const getItem = useCallback((id: string) => {
-      const item = inventory.find((item) => item.id === id);
-      if (item) {
-        return item;
-      }
-      return undefined;
+      if (!inventory) return undefined;
+      return inventory.find((item) => item.id === id);
   }, [inventory]);
 
-  const getItemByStdCode = useCallback((stdCode: string) => inventory.find((item) => item.itemStdCode === stdCode), [inventory]);
+  const getItemByStdCode = useCallback((stdCode: string) => {
+      if (!inventory) return undefined;
+      return inventory.find((item) => item.itemStdCode === stdCode);
+  }, [inventory]);
   
-  const addVehicleModel = async (model: Omit<VehicleModel, 'id'>) => {
+  const addVehicleModel = useCallback(async (model: Omit<VehicleModel, 'id'>) => {
     await addDoc(getCollectionRef('vehicleModels'), model);
-  };
-  const updateVehicleModel = async (id: string, updatedModel: Partial<VehicleModel>) => {
+  }, [getCollectionRef]);
+
+  const updateVehicleModel = useCallback(async (id: string, updatedModel: Partial<VehicleModel>) => {
+    if (!db) return;
     await updateDoc(doc(db, 'vehicleModels', id), updatedModel);
-  };
-  const getVehicleModel = useCallback((id: string) => vehicleModels.find(m => m.id === id), [vehicleModels]);
+  }, [db]);
+
+  const getVehicleModel = useCallback((id: string) => {
+      if (!vehicleModels) return undefined;
+      return vehicleModels.find(m => m.id === id);
+  }, [vehicleModels]);
 
   const assembleVehicle = useCallback(async (vehicleData: Omit<AssembledVehicle, 'id' | 'assemblyDate'>) => {
     setAssemblyQueue((prev) => [...prev, { type: 'vehicle', data: vehicleData }]);
   }, []);
 
-  const deleteAssembledVehicle = useCallback(async (id: string, restock: boolean = false) => {
-    setDeletionQueue(prev => [...prev, { type: 'vehicle', id, restock }]);
-    toast({
-        title: "Deletion Queued",
-        description: `Vehicle deletion has been added to the queue.`
-    });
-  }, [toast]);
-  
-  const addBatteryModel = async (model: Omit<BatteryModel, 'id'>) => {
+  const addBatteryModel = useCallback(async (model: Omit<BatteryModel, 'id'>) => {
     await addDoc(getCollectionRef('batteryModels'), model);
-  };
-  const updateBatteryModel = async (id: string, updatedModel: Partial<BatteryModel>) => {
+  }, [getCollectionRef]);
+
+  const updateBatteryModel = useCallback(async (id: string, updatedModel: Partial<BatteryModel>) => {
+    if (!db) return;
     await updateDoc(doc(db, 'batteryModels', id), updatedModel);
-  };
-  const getBatteryModel = useCallback((id: string) => batteryModels.find(m => m.id === id), [batteryModels]);
+  }, [db]);
+
+  const getBatteryModel = useCallback((id: string) => {
+      if (!batteryModels) return undefined;
+      return batteryModels.find(m => m.id === id);
+  }, [batteryModels]);
   
   const assembleBattery = useCallback(async (batteryData: Omit<AssembledBattery, 'id' | 'assemblyDate'>) => {
     setAssemblyQueue((prev) => [...prev, { type: 'battery', data: batteryData }]);
   }, []);
-
-  const deleteAssembledBattery = useCallback(async (id: string, restock: boolean = false) => {
-    setDeletionQueue(prev => [...prev, { type: 'battery', id, restock }]);
-    toast({
-        title: "Deletion Queued",
-        description: `Battery deletion has been added to the queue.`
-    });
-  }, [toast]);
   
-  const addCustomer = async (customer: Omit<Customer, 'id'>, id?: string) => {
+  const addCustomer = useCallback(async (customer: Omit<Customer, 'id'>, id?: string) => {
     if (!db) return;
     if (id) {
         await updateDoc(doc(db, 'customers', id), customer);
     } else {
         await addDoc(getCollectionRef('customers'), customer);
     }
-  };
-   const addBatchCustomers = useCallback(async (customers: Omit<Customer, 'id'>[]) => {
+  }, [db, getCollectionRef]);
+
+  const addBatchCustomers = useCallback(async (customers: Omit<Customer, 'id'>[]) => {
       if (!db) return;
       const batch = writeBatch(db);
       customers.forEach(customer => {
@@ -437,58 +447,73 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batch.set(docRef, customer);
       });
       await batch.commit();
-  }, [db]);
-  const updateCustomer = async (id: string, updatedCustomer: Partial<Customer>) => {
+  }, [db, getCollectionRef]);
+
+  const updateCustomer = useCallback(async (id: string, updatedCustomer: Partial<Customer>) => {
       if (!db) return;
       await updateDoc(doc(db, 'customers', id), updatedCustomer);
-  };
-  const deleteCustomer = async (id: string) => {
+  }, [db]);
+
+  const deleteCustomer = useCallback(async (id: string) => {
       if (!db) return;
       await deleteDoc(doc(db, 'customers', id));
-  };
-  const getCustomer = useCallback((id: string) => customers.find(c => c.id === id), [customers]);
+  }, [db]);
 
-  const processSale = async (saleData: SaleData) => {
-      if (!db) return;
-      await runTransaction(db, async (transaction) => {
-          for (const saleItem of saleData.items) {
-              const itemRef = doc(db, 'inventory', saleItem.itemId);
-              const itemDoc = await transaction.get(itemRef);
-              if (!itemDoc.exists()) throw new Error(`Item with ID ${saleItem.itemId} not found.`);
+  const getCustomer = useCallback((id: string) => {
+      if (!customers) return undefined;
+      return customers.find(c => c.id === id);
+  }, [customers]);
 
-              const currentItem = itemDoc.data() as InventoryItem;
-              if (currentItem.quantity < saleItem.quantity) {
-                  throw new Error(`Insufficient stock for ${currentItem.productName}.`);
-              }
+  const processSale = useCallback(async (saleData: SaleData) => {
+    if (!db) return;
+    await runTransaction(db, async (transaction) => {
+        const saleItemsInfo = [];
 
-              const newDocRef = doc(collection(db, 'inventory'));
-              const { id: originalId, ...itemDataToCopy } = currentItem;
-              
-              const saleStatus: ItemStatus = itemDataToCopy.itemCategory === 'Assembled Vehicle' || itemDataToCopy.itemCategory === 'Assembled Battery'
+        // 1. All reads first
+        for (const saleItem of saleData.items) {
+            const itemRef = doc(db, 'inventory', saleItem.itemId);
+            const itemDoc = await transaction.get(itemRef);
+            if (!itemDoc.exists()) {
+                throw new Error(`Item with ID ${saleItem.itemId} not found.`);
+            }
+            const currentItem = itemDoc.data() as InventoryItem;
+            if (currentItem.quantity < saleItem.quantity) {
+                throw new Error(`Insufficient stock for ${currentItem.productName}.`);
+            }
+            saleItemsInfo.push({ ref: itemRef, doc: currentItem, sale: saleItem });
+        }
+
+        // 2. All writes second
+        for (const { ref, doc: currentItem, sale: saleItem } of saleItemsInfo) {
+            const newDocRef = doc(collection(db, 'inventory'));
+            const { id: originalId, ...itemDataToCopy } = currentItem;
+
+            const saleStatus: ItemStatus = itemDataToCopy.itemCategory === 'Assembled Vehicle' || itemDataToCopy.itemCategory === 'Assembled Battery'
                 ? 'Sold as vehicle'
                 : 'Sold as Spare';
 
-              transaction.set(newDocRef, {
-                  ...itemDataToCopy,
-                  quantity: saleItem.quantity,
-                  unitPrice: saleItem.unitPrice,
-                  itemStatus: saleStatus,
-                  salesInvoiceNumber: saleData.salesInvoiceNumber,
-                  salesDate: Timestamp.fromDate(saleData.date),
-                  customerId: saleData.customerId,
-              });
+            transaction.set(newDocRef, {
+                ...itemDataToCopy,
+                quantity: saleItem.quantity,
+                unitPrice: saleItem.unitPrice,
+                itemStatus: saleStatus,
+                salesInvoiceNumber: saleData.salesInvoiceNumber,
+                salesDate: Timestamp.fromDate(saleData.date),
+                customerId: saleData.customerId,
+            });
 
-              const remainingQuantity = currentItem.quantity - saleItem.quantity;
-              if (remainingQuantity > 0) {
-                transaction.update(itemRef, { quantity: remainingQuantity });
-              } else {
-                transaction.delete(itemRef);
-              }
-          }
-      });
-  };
+            const remainingQuantity = currentItem.quantity - saleItem.quantity;
+            if (remainingQuantity > 0) {
+                transaction.update(ref, { quantity: remainingQuantity });
+            } else {
+                transaction.delete(ref);
+            }
+        }
+    });
+}, [db]);
 
-  const clearAllData = async () => {
+
+  const clearAllData = useCallback(async () => {
     if (!db) return;
     const collections = ['inventory', 'vehicleModels', 'assembledVehicles', 'batteryModels', 'assembledBatteries', 'customers'];
     for (const coll of collections) {
@@ -499,9 +524,9 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
     }
-  };
+  }, [db, getCollectionRef]);
 
-  const restoreAllData = async (data: Partial<AllData>) => {
+  const restoreAllData = useCallback(async (data: Partial<AllData>) => {
     if (!db) return;
     await clearAllData();
 
@@ -562,7 +587,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         batch.set(docRef, itemData);
     });
     await batch.commit();
-  }
+  }, [db, clearAllData, getCollectionRef]);
 
   // Effect to process the assembly queue
   useEffect(() => {
@@ -658,7 +683,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 purchaseInvoiceNumber: 'ASSEMBLY',
                 vendorName: 'In-House',
                 storageLocation: 'Finished Goods',
-                purchaseDate: assemblyTimestamp,
+                purchaseDate: assemblyTimestamp.toDate(),
                 imageUrl: '',
                 purchasePrice: totalCost,
               };
@@ -685,7 +710,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 purchaseInvoiceNumber: 'ASSEMBLY',
                 vendorName: 'In-House',
                 storageLocation: 'Finished Goods',
-                purchaseDate: assemblyTimestamp,
+                purchaseDate: assemblyTimestamp.toDate(),
                 imageUrl: '',
                 purchasePrice: totalCost,
               };
@@ -707,7 +732,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     processQueue();
-  }, [assemblyQueue, isProcessingAssembly, db, getVehicleModel, getBatteryModel, getItemByStdCode, toast]);
+  }, [assemblyQueue, isProcessingAssembly, db, getVehicleModel, getBatteryModel, getItemByStdCode, toast, getCollectionRef]);
 
   // Effect to process the deletion queue
   useEffect(() => {
@@ -838,18 +863,16 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     processDeletionQueue();
-  }, [deletionQueue, isProcessingDeletion, db, getVehicleModel, getBatteryModel, toast]);
-
-
+  }, [deletionQueue, isProcessingDeletion, db, getVehicleModel, getBatteryModel, toast, getCollectionRef]);
 
   const value = useMemo(
     () => ({
-      inventory,
-      vehicleModels,
-      assembledVehicles,
-      batteryModels,
-      assembledBatteries,
-      customers,
+      inventory: inventory || [],
+      vehicleModels: vehicleModels || [],
+      assembledVehicles: assembledVehicles || [],
+      batteryModels: batteryModels || [],
+      assembledBatteries: assembledBatteries || [],
+      customers: customers || [],
       loading,
       addItem,
       addBatchItems,
@@ -881,41 +904,41 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
       restoreAllData
     }),
     [
-      inventory,
-      vehicleModels,
-      assembledVehicles,
-      batteryModels,
-      assembledBatteries,
-      customers,
-      loading,
-      getItem,
-      getItemByStdCode,
-      getVehicleModel,
-      getBatteryModel,
-      getCustomer,
-      addItem,
-      addBatchItems,
-      splitItem,
-      editAndMergeItem,
-      deleteItem, 
-      deleteMultipleItems, 
-      updateItem, 
-      addVehicleModel, 
-      updateVehicleModel, 
-      assembleVehicle, 
-      deleteAssembledVehicle, 
-      addBatteryModel, 
-      updateBatteryModel, 
-      assembleBattery, 
-      deleteAssembledBattery, 
-      addCustomer,
-      addBatchCustomers,
-      updateCustomer,
-      deleteCustomer,
-      processSale, 
-      clearAllData, 
-      restoreAllData,
-      deleteCurrentUser,
+        inventory,
+        vehicleModels,
+        assembledVehicles,
+        batteryModels,
+        assembledBatteries,
+        customers,
+        loading,
+        addItem,
+        addBatchItems,
+        updateItem,
+        editAndMergeItem,
+        splitItem,
+        deleteItem,
+        deleteMultipleItems,
+        deleteCurrentUser,
+        getItem,
+        getItemByStdCode,
+        addVehicleModel,
+        updateVehicleModel,
+        getVehicleModel,
+        assembleVehicle,
+        deleteAssembledVehicle,
+        addBatteryModel,
+        updateBatteryModel,
+        getBatteryModel,
+        assembleBattery,
+        deleteAssembledBattery,
+        addCustomer,
+        addBatchCustomers,
+        updateCustomer,
+        deleteCustomer,
+        getCustomer,
+        processSale,
+        clearAllData,
+        restoreAllData
     ]
   );
 
@@ -933,5 +956,3 @@ export const useInventory = () => {
   }
   return context;
 };
-
-    

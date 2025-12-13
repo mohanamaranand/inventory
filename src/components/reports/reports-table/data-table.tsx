@@ -89,8 +89,8 @@ export function DataTable<TData extends InventoryItem, TValue>({
        
         <div className="flex gap-2 ml-auto">
             <Select
-                value={(table.getColumn("itemCategory")?.getFilterValue() as string) ?? ""}
-                onValueChange={(value) => table.getColumn("itemCategory")?.setFilterValue(value === "all" ? "" : value)}
+                value={((table.getColumn("itemCategory")?.getFilterValue() as string[])?.[0]) ?? "all"}
+                onValueChange={(value) => table.getColumn("itemCategory")?.setFilterValue(value === "all" ? null : [value])}
             >
                 <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by category" />
@@ -102,8 +102,8 @@ export function DataTable<TData extends InventoryItem, TValue>({
             </Select>
 
             <Select
-                value={(table.getColumn("itemStatus")?.getFilterValue() as string) ?? ""}
-                onValueChange={(value) => table.getColumn("itemStatus")?.setFilterValue(value === "all" ? "" : value)}
+                value={((table.getColumn("itemStatus")?.getFilterValue() as string[])?.[0]) ?? "all"}
+                onValueChange={(value) => table.getColumn("itemStatus")?.setFilterValue(value === "all" ? null : [value])}
             >
                 <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by status" />

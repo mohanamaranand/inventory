@@ -42,7 +42,6 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useUser } from "@/firebase/auth/use-user";
 import { Timestamp } from "firebase/firestore";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -51,11 +50,175 @@ import { Calendar, CalendarIcon, Loader2 } from "lucide-react";
 
 type ColumnsProps = {
   onEdit: (id: string) => void;
+  isPrivilegedUser: boolean;
 };
 
-export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] => {
-    const { user } = useUser();
-    const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+// Extracted StatusCell component to correctly use hooks
+function StatusCell({ row }: { row: { original: InventoryItem } }) {
+  const { splitItem } = useInventory();
+  const { toast } = useToast();
+  const item = row.original;
+  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newStatus, setNewStatus] = useState<ItemStatus | null>(null);
+  const [splitQuantity, setSplitQuantity] = useState<number | string>("");
+  const [salesInvoiceNumber, setSalesInvoiceNumber] = useState("");
+  const [salesDate, setSalesDate] = useState<Date | undefined>(new Date());
+
+  const isSoldStatus = newStatus && SOLD_STATUSES.includes(newStatus as any);
+
+  const handleStatusChange = (status: ItemStatus) => {
+    if (status !== item.itemStatus) {
+      setNewStatus(status);
+      if (item.quantity > 1) {
+        setSplitQuantity(1); // Default to 1
+        setIsSplitDialogOpen(true);
+      } else {
+        handleSplitSubmit(1, status);
+      }
+    }
+  };
+
+  const handleSplitSubmit = async (qty: number, status: ItemStatus) => {
+    setIsSubmitting(true);
+    const { id: toastId } = toast({
+      title: "Updating Status...",
+      description: `Moving ${qty} units of "${item.productName}" to ${status}.`
+    });
+
+    try {
+      const splitData: { salesInvoiceNumber?: string; salesDate?: Date } = {};
+      if (SOLD_STATUSES.includes(status as any)) {
+        splitData.salesInvoiceNumber = salesInvoiceNumber;
+        splitData.salesDate = salesDate;
+      }
+
+      await splitItem(item.id, status, qty, splitData);
+      toast({
+        id: toastId,
+        variant: 'default',
+        title: "Item Status Updated",
+        description: `${qty} units of "${item.productName}" moved to ${status}.`,
+      });
+    } catch (error: any) {
+      toast({
+        id: toastId,
+        variant: 'destructive',
+        title: 'Operation Failed',
+        description: error.message || 'Could not update item status.',
+      });
+    } finally {
+      setIsSubmitting(false);
+      setIsSplitDialogOpen(false);
+      setNewStatus(null);
+      setSplitQuantity("");
+      setSalesInvoiceNumber("");
+      setSalesDate(new Date());
+    }
+  };
+
+  if (item.itemCategory === 'Assembled Vehicle' || item.itemCategory === 'Assembled Battery') {
+    return <Badge variant="default">{item.itemStatus}</Badge>;
+  }
+
+  return (
+    <>
+      <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+        <Select onValueChange={handleStatusChange} value={item.itemStatus} disabled={isSubmitting}>
+          <SelectTrigger className="w-[150px] text-xs h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ITEM_STATUSES.map((status) => (
+              <SelectItem key={status} value={status} disabled={status === item.itemStatus}>
+                {status}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Split Item Quantity</DialogTitle>
+            <DialogDescription>
+              Move a specific quantity of "{item.productName}" to the new status "{newStatus}". The current quantity is {item.quantity}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="split-quantity" className="text-right">
+                Quantity
+              </Label>
+              <Input
+                id="split-quantity"
+                type="number"
+                value={splitQuantity}
+                onChange={(e) => setSplitQuantity(e.target.value)}
+                className="col-span-3"
+                max={item.quantity}
+                min={1}
+              />
+            </div>
+            {isSoldStatus && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="sales-invoice" className="text-right">
+                    Sales Invoice
+                  </Label>
+                  <Input
+                    id="sales-invoice"
+                    value={salesInvoiceNumber}
+                    onChange={(e) => setSalesInvoiceNumber(e.target.value)}
+                    className="col-span-3"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="sales-date" className="text-right">
+                    Sales Date
+                  </Label>
+                   <Popover>
+                      <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "col-span-3 justify-start text-left font-normal",
+                              !salesDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {salesDate ? format(salesDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={salesDate}
+                          onSelect={setSalesDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
+            </DialogClose>
+            <Button type="button" onClick={() => handleSplitSubmit(Number(splitQuantity), newStatus!)} disabled={isSubmitting || !splitQuantity || Number(splitQuantity) > item.quantity}>
+               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               Confirm Split
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+
+export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): ColumnDef<InventoryItem>[] => {
 
     const allColumns: ColumnDef<InventoryItem>[] = [
       {
@@ -127,175 +290,16 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
           return <Badge variant="secondary">{row.original.itemCategory}</Badge>;
         },
         filterFn: (row, id, value) => {
+          if (!value || value.length === 0) return true;
           return value.includes(row.getValue(id));
         },
       },
       {
         accessorKey: "itemStatus",
         header: "Status",
-        cell: function Cell({ row }) {
-          const { splitItem } = useInventory();
-          const { toast } = useToast();
-          const item = row.original;
-          const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
-          const [isSubmitting, setIsSubmitting] = useState(false);
-          const [newStatus, setNewStatus] = useState<ItemStatus | null>(null);
-          const [splitQuantity, setSplitQuantity] = useState<number | string>("");
-          const [salesInvoiceNumber, setSalesInvoiceNumber] = useState("");
-          const [salesDate, setSalesDate] = useState<Date | undefined>(new Date());
-      
-          const isSoldStatus = newStatus && SOLD_STATUSES.includes(newStatus as any);
-      
-          const handleStatusChange = (status: ItemStatus) => {
-            if (status !== item.itemStatus) {
-              setNewStatus(status);
-              if (item.quantity > 1) {
-                setSplitQuantity(1); // Default to 1
-                setIsSplitDialogOpen(true);
-              } else {
-                 handleSplitSubmit(1, status);
-              }
-            }
-          };
-      
-          const handleSplitSubmit = async (qty: number, status: ItemStatus) => {
-            setIsSubmitting(true);
-            const { id: toastId } = toast({
-              title: "Updating Status...",
-              description: `Moving ${qty} units of "${item.productName}" to ${status}.`
-            });
-      
-            try {
-              const splitData: { salesInvoiceNumber?: string; salesDate?: Date } = {};
-              if (SOLD_STATUSES.includes(status as any)) {
-                splitData.salesInvoiceNumber = salesInvoiceNumber;
-                splitData.salesDate = salesDate;
-              }
-      
-              await splitItem(item.id, status, qty, splitData);
-              toast({
-                id: toastId,
-                variant: 'default',
-                title: "Item Status Updated",
-                description: `${qty} units of "${item.productName}" moved to ${status}.`,
-              });
-            } catch (error: any) {
-              toast({
-                id: toastId,
-                variant: 'destructive',
-                title: 'Operation Failed',
-                description: error.message || 'Could not update item status.',
-              });
-            } finally {
-              setIsSubmitting(false);
-              setIsSplitDialogOpen(false);
-              setNewStatus(null);
-              setSplitQuantity("");
-              setSalesInvoiceNumber("");
-              setSalesDate(new Date());
-            }
-          };
-      
-          if (item.itemCategory === 'Assembled Vehicle' || item.itemCategory === 'Assembled Battery') {
-            return <Badge variant="default">{item.itemStatus}</Badge>;
-          }
-      
-          return (
-            <>
-              <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
-                <Select onValueChange={handleStatusChange} value={item.itemStatus} disabled={isSubmitting}>
-                  <SelectTrigger className="w-[150px] text-xs h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ITEM_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status} disabled={status === item.itemStatus}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Split Item Quantity</DialogTitle>
-                    <DialogDescription>
-                      Move a specific quantity of "{item.productName}" to the new status "{newStatus}". The current quantity is {item.quantity}.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="split-quantity" className="text-right">
-                        Quantity
-                      </Label>
-                      <Input
-                        id="split-quantity"
-                        type="number"
-                        value={splitQuantity}
-                        onChange={(e) => setSplitQuantity(e.target.value)}
-                        className="col-span-3"
-                        max={item.quantity}
-                        min={1}
-                      />
-                    </div>
-                    {isSoldStatus && (
-                      <>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="sales-invoice" className="text-right">
-                            Sales Invoice
-                          </Label>
-                          <Input
-                            id="sales-invoice"
-                            value={salesInvoiceNumber}
-                            onChange={(e) => setSalesInvoiceNumber(e.target.value)}
-                            className="col-span-3"
-                            placeholder="Optional"
-                          />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="sales-date" className="text-right">
-                            Sales Date
-                          </Label>
-                           <Popover>
-                              <PopoverTrigger asChild>
-                                  <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                      "col-span-3 justify-start text-left font-normal",
-                                      !salesDate && "text-muted-foreground"
-                                    )}
-                                  >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {salesDate ? format(salesDate, "PPP") : <span>Pick a date</span>}
-                                  </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={salesDate}
-                                  onSelect={setSalesDate}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
-                    </DialogClose>
-                    <Button type="button" onClick={() => handleSplitSubmit(Number(splitQuantity), newStatus!)} disabled={isSubmitting || !splitQuantity || Number(splitQuantity) > item.quantity}>
-                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                       Confirm Split
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </>
-          );
-        },
+        cell: ({ row }) => <StatusCell row={row} />,
         filterFn: (row, id, value) => {
+          if (!value || value.length === 0) return true;
           return value.includes(row.getValue(id));
         },
       },
@@ -441,3 +445,5 @@ export const columns = ({ onEdit }: ColumnsProps): ColumnDef<InventoryItem>[] =>
 
     return allColumns;
 };
+
+    

@@ -53,40 +53,40 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
   } from "@/components/ui/alert-dialog"
+import { useUser } from "@/firebase";
+import { Skeleton } from "@/components/ui/skeleton";
+import { defineColumns } from "./columns";
+
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  onEdit: (id: string) => void;
 }
 
 export function DataTable<TData extends InventoryItem, TValue>({
-  columns,
   data,
+  onEdit,
 }: DataTableProps<TData, TValue>) {
   const searchParams = useSearchParams();
-  const statusFilterFromURL = searchParams.get('status');
-  const categoryFilterFromURL = searchParams.get('category');
-
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const { user, loading: userLoading } = useUser();
   
-  const initialFilters: ColumnFiltersState = [];
-  if (statusFilterFromURL) {
-    initialFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
-  }
-  if (categoryFilterFromURL) {
-    initialFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
-  }
-
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
 
-
   const { deleteMultipleItems } = useInventory();
   const { toast } = useToast();
+
+  const isPrivilegedUser = React.useMemo(() => user?.role === 'owner' || user?.role === 'administrator', [user]);
+
+  const columns = React.useMemo(() => {
+    if (userLoading) return [];
+    return defineColumns({ onEdit, isPrivilegedUser });
+  }, [isPrivilegedUser, onEdit, userLoading]);
 
   const table = useReactTable({
     data,
@@ -107,7 +107,31 @@ export function DataTable<TData extends InventoryItem, TValue>({
       columnVisibility,
       rowSelection,
     },
+    defaultColumn: {
+      size: 0,
+    },
   });
+
+  React.useEffect(() => {
+    const statusFilterFromURL = searchParams.get('status');
+    const categoryFilterFromURL = searchParams.get('category');
+    
+    table.setColumnFilters(currentFilters => {
+        const newFilters = [];
+        if (statusFilterFromURL) {
+            newFilters.push({ id: 'itemStatus', value: [statusFilterFromURL] });
+        }
+        if (categoryFilterFromURL) {
+            newFilters.push({ id: 'itemCategory', value: [categoryFilterFromURL] });
+        }
+        
+        if (newFilters.length > 0) {
+            const otherFilters = currentFilters.filter(f => f.id !== 'itemStatus' && f.id !== 'itemCategory');
+            return [...otherFilters, ...newFilters];
+        }
+        return currentFilters;
+    });
+  }, [searchParams, table]);
 
   const handleDeleteSelected = (restock: boolean) => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
@@ -130,6 +154,24 @@ export function DataTable<TData extends InventoryItem, TValue>({
     }, {} as Record<string, boolean>);
     table.setRowSelection(filteredRowIds);
   };
+  
+  if (userLoading || columns.length === 0) {
+      return (
+          <div className="space-y-4">
+              <div className="flex items-center p-4 gap-4 flex-wrap">
+                  <Skeleton className="h-10 w-full max-w-sm" />
+                  <div className="flex gap-2 ml-auto">
+                       <Skeleton className="h-10 w-[180px]" />
+                       <Skeleton className="h-10 w-[180px]" />
+                       <Skeleton className="h-10 w-24" />
+                  </div>
+              </div>
+              <div className="rounded-lg border">
+                <Skeleton className="h-96 w-full" />
+              </div>
+          </div>
+      )
+  }
 
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">

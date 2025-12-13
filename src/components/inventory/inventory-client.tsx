@@ -1,21 +1,18 @@
 
 'use client';
 
-import { Header } from '@/components/layout/header';
+import { useState, useRef, useCallback } from 'react';
+import * as XLSX from 'xlsx';
+import { useInventory } from '@/context/inventory-context-firebase';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Upload } from 'lucide-react';
-import { useInventory } from '@/context/inventory-context-firebase';
 import { InventoryForm } from '@/components/inventory/inventory-form';
 import { DataTable } from '@/components/inventory/inventory-table/data-table';
-import { columns } from '@/components/inventory/inventory-table/columns';
-import { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
-import { Timestamp } from 'firebase/firestore';
 
-export function InventoryPageContent() {
-  const { addBatchItems, loading } = useInventory();
+export function InventoryClient() {
+  const { addBatchItems } = useInventory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -26,10 +23,10 @@ export function InventoryPageContent() {
     setSheetOpen(true);
   };
 
-  const handleEditItem = (id: string) => {
+  const handleEditItem = useCallback((id: string) => {
     setEditingItemId(id);
     setSheetOpen(true);
-  };
+  }, []);
 
   const closeSheet = () => {
     setSheetOpen(false);
@@ -142,10 +139,9 @@ export function InventoryPageContent() {
     reader.readAsArrayBuffer(file);
   };
 
-
   return (
     <>
-      <Header title="Inventory">
+      <div className="flex justify-end gap-2 mb-4">
         <input
           type="file"
           ref={fileInputRef}
@@ -161,7 +157,7 @@ export function InventoryPageContent() {
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Item
         </Button>
-      </Header>
+      </div>
 
       <InventoryForm
         open={sheetOpen}
@@ -171,11 +167,9 @@ export function InventoryPageContent() {
       />
 
       <DataTable
-        columns={columns({ onEdit: handleEditItem })}
         data={useInventory().inventory}
+        onEdit={handleEditItem}
       />
     </>
   );
 }
-
-    

@@ -21,33 +21,36 @@ import {
 import { useInventory } from "@/context/inventory-context-firebase"
 import { SOLD_STATUSES } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { Timestamp } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
-import { format, startOfMonth, startOfYear, startOfDay, subMonths, subYears, subDays, endOfDay, endOfMonth, endOfYear } from 'date-fns';
+import { format, subDays, subMonths, subYears, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval } from 'date-fns';
 
 const chartConfig = {
-  sales: {
-    label: "Sales",
+  revenue: {
+    label: "Revenue",
     color: "hsl(var(--chart-1))",
   },
-  purchases: {
-    label: "Purchases",
+  cogs: {
+    label: "COGS",
     color: "hsl(var(--chart-2))",
+  },
+  profit: {
+    label: "Profit",
+    color: "hsl(var(--chart-3))",
   },
 } satisfies ChartConfig
 
-type ChartData = { label: string; sales: number; purchases: number }[];
+type ChartData = { label: string; revenue: number; cogs: number; profit: number }[];
 type View = 'daily' | 'monthly' | 'yearly';
 
-export function SalesPurchasesChart() {
-  const { inventory } = useInventory()
+export function ProfitLossChart() {
+  const { inventory } = useInventory();
   const [view, setView] = React.useState<View>('monthly');
   const [chartData, setChartData] = React.useState<ChartData>([]);
 
   React.useEffect(() => {
     const processData = () => {
       const now = new Date();
-      let dataMap = new Map<string, { sales: number, purchases: number }>();
+      let dataMap = new Map<string, { revenue: number, cogs: number }>();
       let labels: string[] = [];
       let formatLabel: (date: Date) => string;
 
@@ -57,7 +60,7 @@ export function SalesPurchasesChart() {
           const date = subMonths(now, i);
           const label = formatLabel(date);
           labels.push(label);
-          dataMap.set(label, { sales: 0, purchases: 0 });
+          dataMap.set(label, { revenue: 0, cogs: 0 });
         }
       } else if (view === 'yearly') {
         formatLabel = (date) => format(date, 'yyyy');
@@ -65,7 +68,7 @@ export function SalesPurchasesChart() {
           const date = subYears(now, i);
           const label = formatLabel(date);
           labels.push(label);
-          dataMap.set(label, { sales: 0, purchases: 0 });
+          dataMap.set(label, { revenue: 0, cogs: 0 });
         }
       } else { // daily
         formatLabel = (date) => format(date, 'MMM d');
@@ -73,41 +76,35 @@ export function SalesPurchasesChart() {
           const date = subDays(now, i);
           const label = formatLabel(date);
           labels.push(label);
-          dataMap.set(label, { sales: 0, purchases: 0 });
+          dataMap.set(label, { revenue: 0, cogs: 0 });
         }
       }
 
       inventory.forEach(item => {
-        // Process Purchases
-        if (item.purchaseDate) {
-          const purchaseDate = item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : new Date(item.purchaseDate);
-          if (!isNaN(purchaseDate.getTime())) {
-            const label = formatLabel(purchaseDate);
-            if (dataMap.has(label)) {
-              const purchaseValue = item.quantity * (item.purchasePrice || 0);
-              dataMap.get(label)!.purchases += purchaseValue;
-            }
-          }
-        }
-
-        // Process Sales
         if (SOLD_STATUSES.includes(item.itemStatus) && item.salesDate) {
-          const saleDate = item.salesDate instanceof Timestamp ? item.salesDate.toDate() : new Date(item.salesDate);
-          if (!isNaN(saleDate.getTime())) {
+          const saleDate = item.salesDate;
+          if (saleDate) {
             const label = formatLabel(saleDate);
             if (dataMap.has(label)) {
-              const saleValue = item.quantity * item.unitPrice;
-              dataMap.get(label)!.sales += saleValue;
+              const revenue = item.quantity * item.unitPrice;
+              const cogs = item.quantity * (item.purchasePrice || 0);
+              const current = dataMap.get(label)!;
+              current.revenue += revenue;
+              current.cogs += cogs;
             }
           }
         }
       });
       
-      const data: ChartData = labels.map(label => ({
-        label,
-        sales: dataMap.get(label)?.sales || 0,
-        purchases: dataMap.get(label)?.purchases || 0,
-      }));
+      const data: ChartData = labels.map(label => {
+        const values = dataMap.get(label) || { revenue: 0, cogs: 0 };
+        return {
+          label,
+          revenue: values.revenue,
+          cogs: values.cogs,
+          profit: values.revenue - values.cogs,
+        };
+      });
 
       setChartData(data);
     };
@@ -126,7 +123,7 @@ export function SalesPurchasesChart() {
       <CardHeader>
         <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-                <CardTitle>Sales & Purchases Overview</CardTitle>
+                <CardTitle>Profit & Loss Overview</CardTitle>
                 <CardDescription>{description[view]}</CardDescription>
             </div>
             <div className="flex gap-2">
@@ -162,8 +159,9 @@ export function SalesPurchasesChart() {
               }
             />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="purchases" fill="var(--color-purchases)" radius={4} />
-            <Bar dataKey="sales" fill="var(--color-sales)" radius={4} />
+            <Bar dataKey="profit" fill="var(--color-profit)" radius={4} />
+            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={4} />
+            <Bar dataKey="cogs" fill="var(--color-cogs)" radius={4} />
           </BarChart>
         </ChartContainer>
       </CardContent>

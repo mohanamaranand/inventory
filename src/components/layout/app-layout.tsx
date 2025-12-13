@@ -17,10 +17,12 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && !user && pathname !== '/login') {
+        if (loading) return; // Wait for the auth state to be determined
+
+        if (!user && pathname !== '/login') {
             router.push('/login');
         }
-        if (!loading && user && pathname === '/login') {
+        if (user && pathname === '/login') {
             router.push('/dashboard');
         }
     }, [user, loading, pathname, router]);
@@ -33,18 +35,19 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
         );
     }
     
-    if (!user && pathname !== '/login') {
-        return (
-             <div className="flex h-screen w-screen items-center justify-center">
-                <Skeleton className="h-full w-full" />
-            </div>
-        );
-    }
-    
+    // If we are on the login page, just render children (the login page itself)
     if (pathname === '/login') {
         return <>{children}</>;
     }
+
+    // If we are not loading, but there's no user and we are not on the login page,
+    // we return null because the useEffect will handle the redirect.
+    // This prevents rendering the main layout for a split second before redirecting.
+    if (!user) {
+        return null;
+    }
     
+    // If we have a user, render the full application layout.
     return (
         <SidebarProvider>
             <AppSidebar />
