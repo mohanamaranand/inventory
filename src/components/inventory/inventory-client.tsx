@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useInventory } from '@/context/inventory-context-firebase';
 import { Button } from '@/components/ui/button';
@@ -23,10 +23,10 @@ export function InventoryClient() {
     setSheetOpen(true);
   };
 
-  const handleEditItem = (id: string) => {
+  const handleEditItem = useCallback((id: string) => {
     setEditingItemId(id);
     setSheetOpen(true);
-  };
+  }, []);
 
   const closeSheet = () => {
     setSheetOpen(false);
