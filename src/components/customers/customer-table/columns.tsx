@@ -1,6 +1,7 @@
 
 "use client";
 
+import { memo } from 'react';
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   DropdownMenu,
@@ -16,7 +17,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { Customer } from "@/lib/types";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 type ColumnsProps = {
@@ -24,8 +24,8 @@ type ColumnsProps = {
   onViewPurchases: (customer: Customer) => void;
 };
 
-// A dedicated component for the cell to safely use hooks
-function CustomerIdCell({ row }: { row: { original: Customer } }) {
+// A dedicated component for the cell to safely use hooks, wrapped in React.memo
+const CustomerIdCell = memo(({ row }: { row: { original: Customer } }) => {
   const id = row.original.id;
   const { toast } = useToast();
 
@@ -37,24 +37,17 @@ function CustomerIdCell({ row }: { row: { original: Customer } }) {
   return (
     <div className="flex items-center gap-2">
       <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
-      <TooltipProvider>
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
-                    <Copy className="h-3 w-3" />
-                </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-                <p>Copy Customer ID</p>
-            </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard}>
+          <Copy className="h-3 w-3" />
+      </Button>
     </div>
   );
-}
+});
+CustomerIdCell.displayName = 'CustomerIdCell';
 
-// A dedicated component for the actions cell to safely use hooks
-function ActionsCell({ row, onEdit, onViewPurchases }: { row: { original: Customer }, onEdit: (id: string) => void, onViewPurchases: (customer: Customer) => void }) {
+
+// A dedicated component for the actions cell to safely use hooks, wrapped in React.memo
+const ActionsCell = memo(({ row, onEdit, onViewPurchases }: { row: { original: Customer }, onEdit: (id: string) => void, onViewPurchases: (customer: Customer) => void }) => {
   const { deleteCustomer } = useInventory();
   const { toast } = useToast();
   const customer = row.original;
@@ -95,7 +88,8 @@ function ActionsCell({ row, onEdit, onViewPurchases }: { row: { original: Custom
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+});
+ActionsCell.displayName = 'ActionsCell';
 
 
 export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Customer>[] => [
@@ -162,5 +156,3 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
     cell: ({ row }) => <ActionsCell row={row} onEdit={onEdit} onViewPurchases={onViewPurchases} />,
   },
 ];
-
-    

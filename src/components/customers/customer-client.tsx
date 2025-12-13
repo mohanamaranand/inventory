@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { useInventory } from "@/context/inventory-context-firebase";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export function CustomerClient() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [purchaseHistoryCustomer, setPurchaseHistoryCustomer] = useState<Customer | null>(null);
+  const [purchaseHistoryOpen, setPurchaseHistoryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -26,14 +27,15 @@ export function CustomerClient() {
     setSheetOpen(true);
   };
 
-  const handleEditCustomer = (id: string) => {
+  const handleEditCustomer = useCallback((id: string) => {
     setEditingCustomerId(id);
     setSheetOpen(true);
-  };
+  }, []);
 
-  const handleViewPurchases = (customer: Customer) => {
+  const handleViewPurchases = useCallback((customer: Customer) => {
     setPurchaseHistoryCustomer(customer);
-  };
+    setPurchaseHistoryOpen(true);
+  }, []);
 
   const closeSheet = () => {
     setSheetOpen(false);
@@ -44,6 +46,11 @@ export function CustomerClient() {
     if (!purchaseHistoryCustomer) return [];
     return inventory.filter(item => item.customerId === purchaseHistoryCustomer.id);
   }, [inventory, purchaseHistoryCustomer]);
+
+  const memoizedColumns = useMemo(
+    () => columns({ onEdit: handleEditCustomer, onViewPurchases: handleViewPurchases }),
+    [handleEditCustomer, handleViewPurchases]
+  );
 
   const handleExport = () => {
     const worksheet = XLSX.utils.json_to_sheet(customers);
@@ -138,15 +145,13 @@ export function CustomerClient() {
         customerId={editingCustomerId}
       />
       
-      <DataTable columns={columns({ onEdit: handleEditCustomer, onViewPurchases: handleViewPurchases })} data={customers} />
+      <DataTable columns={memoizedColumns} data={customers} />
 
       <PurchaseHistoryDrawer 
         customer={purchaseHistoryCustomer}
         purchases={customerPurchases}
-        open={!!purchaseHistoryCustomer}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setPurchaseHistoryCustomer(null);
-        }}
+        open={purchaseHistoryOpen}
+        onOpenChange={setPurchaseHistoryOpen}
       />
     </>
   );
