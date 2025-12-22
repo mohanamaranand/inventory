@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils";
 import type { Customer, InventoryItem } from "@/lib/types";
 import { format } from "date-fns";
 import { Timestamp } from "firebase/firestore";
+import * as XLSX from 'xlsx';
 
 type PurchaseHistoryDrawerProps = {
   customer: Customer | null;
@@ -32,29 +33,39 @@ export function PurchaseHistoryDrawer({
 }: PurchaseHistoryDrawerProps) {
 
   const handleDownload = () => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + "Date Sold,Product,Invoice #,Qty,Price,Total\n"
-      + purchases.map(item => {
-        const date = item.salesDate;
-        const jsDate = date instanceof Timestamp ? date.toDate() : (date instanceof Date ? date : null);
-        const isValidDate = jsDate && !isNaN(jsDate.getTime());
-        return [
-          isValidDate ? format(jsDate, "PPP") : 'N/A',
-          `"${item.productName} (${item.itemStdCode})"`,
-          item.salesInvoiceNumber,
-          item.quantity,
-          item.unitPrice,
-          item.unitPrice * item.quantity
-        ].join(",");
-      }).join("\n");
+    if (!customer) return;
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `purchase_history_${customer?.name}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Customer Details
+    const customerData = [
+      ["Name", customer.name],
+      ["Contact Person", customer.contactPerson],
+      ["Phone", customer.phone],
+      ["Email", customer.email],
+      ["Address", customer.address],
+    ];
+    const customerWorksheet = XLSX.utils.aoa_to_sheet(customerData);
+
+    // Purchase History
+    const purchaseData = purchases.map(item => {
+      const date = item.salesDate;
+      const jsDate = date instanceof Timestamp ? date.toDate() : (date instanceof Date ? date : null);
+      const isValidDate = jsDate && !isNaN(jsDate.getTime());
+      return {
+        "Date Sold": isValidDate ? format(jsDate, "PPP") : 'N/A',
+        "Product": `${item.productName} (${item.itemStdCode})`,
+        "Invoice #": item.salesInvoiceNumber,
+        "Qty": item.quantity,
+        "Price": item.unitPrice,
+        "Total": item.unitPrice * item.quantity
+      };
+    });
+
+    const purchaseWorksheet = XLSX.utils.json_to_sheet(purchaseData);
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, customerWorksheet, "Customer Details");
+    XLSX.utils.book_append_sheet(workbook, purchaseWorksheet, "Purchase History");
+    XLSX.writeFile(workbook, `purchase_history_${customer.name}.xlsx`);
   };
 
   return (
