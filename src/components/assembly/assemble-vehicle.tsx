@@ -32,7 +32,7 @@ import {
 import { useInventory } from "@/context/inventory-context-firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Wrench, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
@@ -72,6 +72,31 @@ export function AssembleVehicle() {
   }, [selectedModel, getItemByStdCode, inventory]);
   
   const canAssemble = partsAvailability.every(p => p.sufficient);
+
+  const chassisNumber = form.watch("chassisNumber");
+  const motorNumber = form.watch("motorNumber");
+
+  useEffect(() => {
+    if (chassisNumber && assembledVehicles.some(v => v.chassisNumber === chassisNumber)) {
+      form.setError("chassisNumber", {
+        type: "manual",
+        message: "This chassis number is already in use.",
+      });
+    } else {
+      form.clearErrors("chassisNumber");
+    }
+  }, [chassisNumber, assembledVehicles, form]);
+
+  useEffect(() => {
+    if (motorNumber && assembledVehicles.some(v => v.motorNumber === motorNumber)) {
+      form.setError("motorNumber", {
+        type: "manual",
+        message: "This motor number is already in use.",
+      });
+    } else {
+      form.clearErrors("motorNumber");
+    }
+  }, [motorNumber, assembledVehicles, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (assembledVehicles.some(v => v.chassisNumber === values.chassisNumber)) {

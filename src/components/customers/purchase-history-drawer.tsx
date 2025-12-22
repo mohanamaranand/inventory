@@ -42,6 +42,8 @@ export function PurchaseHistoryDrawer({
       ["Phone", customer.phone],
       ["Email", customer.email],
       ["Address", customer.address],
+      ["GST Number", customer.gstNumber || "0000"],
+      ["Aadhar Number", customer.aadharNumber || "0000"],
     ];
     const customerWorksheet = XLSX.utils.aoa_to_sheet(customerData);
 

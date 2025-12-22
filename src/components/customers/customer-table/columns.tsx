@@ -152,6 +152,16 @@ export const columns = ({ onEdit, onViewPurchases }: ColumnsProps): ColumnDef<Cu
     cell: ({ row }) => <div className="truncate max-w-xs">{row.original.address}</div>,
   },
   {
+    accessorKey: "gstNumber",
+    header: "GST Number",
+    cell: ({ row }) => row.original.gstNumber || "0000",
+  },
+  {
+    accessorKey: "aadharNumber",
+    header: "Aadhar Number",
+    cell: ({ row }) => row.original.aadharNumber || "0000",
+  },
+  {
     id: "actions",
     cell: ({ row }) => <ActionsCell row={row} onEdit={onEdit} onViewPurchases={onViewPurchases} />,
   },

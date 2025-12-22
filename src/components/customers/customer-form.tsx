@@ -34,6 +34,8 @@ const formSchema = z.object({
   phone: z.string().min(1, "Phone number is required."),
   email: z.string().email("Invalid email address."),
   address: z.string().min(1, "Address is required."),
+  gstNumber: z.string().optional(),
+  aadharNumber: z.string().optional(),
 });
 
 type CustomerFormProps = {
@@ -62,12 +64,18 @@ export function CustomerForm({
         phone: "",
         email: "",
         address: "",
+        gstNumber: "",
+        aadharNumber: "",
       },
   });
 
   useEffect(() => {
     if (editingCustomer) {
-      form.reset(editingCustomer);
+      form.reset({
+        ...editingCustomer,
+        gstNumber: editingCustomer.gstNumber || "",
+        aadharNumber: editingCustomer.aadharNumber || "",
+      });
     } else {
       form.reset({
         name: "",
@@ -75,16 +83,24 @@ export function CustomerForm({
         phone: "",
         email: "",
         address: "",
+        gstNumber: "",
+        aadharNumber: "",
       });
     }
   }, [editingCustomer, form, open]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
+    const customerData = {
+      ...values,
+      gstNumber: values.gstNumber || "0000",
+      aadharNumber: values.aadharNumber || "0000",
+    };
+
     if (editingCustomer && customerId) {
-      updateCustomer(customerId, values);
+      updateCustomer(customerId, customerData);
       toast({ title: "Customer Updated", description: `"${values.name}" has been updated.` });
     } else {
-      addCustomer(values);
+      addCustomer(customerData);
       toast({ title: "Customer Added", description: `"${values.name}" has been added.` });
     }
     onFormSubmit();
@@ -170,6 +186,34 @@ export function CustomerForm({
                     </FormItem>
                 )}
                 />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="gstNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>GST Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., 29AABCU9517R1Z0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="aadharNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Aadhar Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., 1234 5678 9012" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </div>
 
             <SheetFooter>
                 <SheetClose asChild>

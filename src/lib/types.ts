@@ -102,6 +102,8 @@ export interface Customer {
     phone: string;
     email: string;
     address: string;
+    gstNumber: string;
+    aadharNumber: string;
 }
 
 export type UserRole = 'owner' | 'administrator' | 'employee' | null;
