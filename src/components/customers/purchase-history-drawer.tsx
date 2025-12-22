@@ -8,6 +8,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -29,14 +30,48 @@ export function PurchaseHistoryDrawer({
   open,
   onOpenChange,
 }: PurchaseHistoryDrawerProps) {
+
+  const handleDownload = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Date Sold,Product,Invoice #,Qty,Price,Total\n"
+      + purchases.map(item => {
+        const date = item.salesDate;
+        const jsDate = date instanceof Timestamp ? date.toDate() : (date instanceof Date ? date : null);
+        const isValidDate = jsDate && !isNaN(jsDate.getTime());
+        return [
+          isValidDate ? format(jsDate, "PPP") : 'N/A',
+          `"${item.productName} (${item.itemStdCode})"`,
+          item.salesInvoiceNumber,
+          item.quantity,
+          item.unitPrice,
+          item.unitPrice * item.quantity
+        ].join(",");
+      }).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `purchase_history_${customer?.name}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-3xl w-full">
         <SheetHeader>
-          <SheetTitle>Purchase History: {customer?.name}</SheetTitle>
-          <SheetDescription>
-            A complete list of items purchased by {customer?.contactPerson}.
-          </SheetDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <SheetTitle>Purchase History: {customer?.name}</SheetTitle>
+              <SheetDescription>
+                A complete list of items purchased by {customer?.contactPerson}.
+              </SheetDescription>
+            </div>
+            <Button onClick={handleDownload} disabled={purchases.length === 0}>
+              Download
+            </Button>
+          </div>
         </SheetHeader>
         <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
           <div className="rounded-md border">
