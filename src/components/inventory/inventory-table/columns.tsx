@@ -73,13 +73,10 @@ function StatusUpdateDialog({
     const [faultDescription, setFaultDescription] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Use a ref to track if the dialog was previously open to detect open transition
     const wasOpenRef = useRef(open);
 
-    // Reset state ONLY when dialog opens
     useEffect(() => {
         if (open && !wasOpenRef.current) {
-            // Dialog just opened
             setSplitQuantity(item.quantity > 1 ? 1 : item.quantity);
             if (targetStatus && (targetStatus === 'Fault' || targetStatus === 'Damaged') && item.faultDescription) {
                 setFaultDescription(item.faultDescription);
@@ -91,9 +88,6 @@ function StatusUpdateDialog({
         }
         wasOpenRef.current = open;
     }, [open, item, targetStatus]); 
-    // Note: We include item and targetStatus in dependency array but condition logic prevents reset unless opening.
-    // However, if targetStatus changes while open (not possible with current UI but safe), we might want to update? 
-    // Current UI doesn't allow changing targetStatus while open.
     
     if (!targetStatus) return null;
 
@@ -262,7 +256,7 @@ function StatusCell({ row }: { row: { original: InventoryItem } }) {
             title: 'Operation Failed',
             description: error.message || 'Could not update item status.',
         });
-        throw error; // Re-throw to handle loading state in dialog
+        throw error;
     }
   };
 
@@ -359,6 +353,15 @@ export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): Colum
             </div>
           );
         },
+      },
+      {
+        accessorKey: "faultDescription",
+        header: "Fault Details",
+        cell: ({ row }) => {
+            const desc = row.original.faultDescription;
+            if (!desc) return <span className="text-muted-foreground">-</span>;
+            return <span className="text-red-600 font-medium max-w-[150px] truncate" title={desc}>{desc}</span>;
+        }
       },
       {
         accessorKey: "itemCategory",

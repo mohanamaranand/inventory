@@ -10,7 +10,6 @@ import { CategoryWidget } from "@/components/dashboard/category-widget";
 import { Suspense, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/firebase";
-import { ProfitLossChart } from "@/components/dashboard/profit-loss-chart";
 import { TopPerformingProducts } from "@/components/dashboard/top-performing-products";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { LowStockWidget } from "@/components/dashboard/low-stock-widget";
@@ -43,7 +42,9 @@ function DashboardLoadingSkeleton() {
 
 export default function DashboardPage() {
     const { user, loading } = useUser();
-    const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+    const isOwner = user?.role === 'owner';
+    const isAdmin = user?.role === 'administrator';
+    const isPrivilegedUser = isOwner || isAdmin;
     
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -64,14 +65,16 @@ export default function DashboardPage() {
                 <DashboardLoadingSkeleton />
             ) : (
                 <>
-                    <Header title="Dashboard" />
+                    <Header title={isPrivilegedUser ? "Dashboard (Admin)" : "Dashboard"} />
+                    
                     <div className="space-y-8">
                         <StatsCards />
 
                         {isPrivilegedUser && (
-                            <div className="space-y-8">
-                                <ProfitLossChart />
-                                <TopPerformingProducts />
+                             <div className="grid gap-6 md:grid-cols-1">
+                                <div>
+                                    <TopPerformingProducts />
+                                </div>
                             </div>
                         )}
 

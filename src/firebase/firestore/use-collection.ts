@@ -176,7 +176,6 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const existingDoc = querySnapshot.docs.find(doc => {
             const data = doc.data() as InventoryItem;
             const pdMatch = (data.productDetails || '') === (item.productDetails || '');
-            // For new items (In Stock), faultDescription is typically not set, but if it is, we should respect it.
             const fdMatch = (data.faultDescription || null) === (item.faultDescription || null);
             return pdMatch && fdMatch;
         });
@@ -257,20 +256,10 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         const { id: originalId, ...newItemData } = itemToSplit;
         
         // Determine the new fault description. 
-        // If splitItemData.faultDescription is provided (even empty string), use it.
-        // If not provided, and we are moving TO a fault status, it might be undefined (which means no fault).
-        // If we are moving FROM a fault status (e.g. repaired), we probably want to clear it (set to null).
-        // The logic `splitItemData?.faultDescription ?? null` means: if provided use it, else null.
-        // But if `newItemData` had a fault description and we are just splitting (same status), we should preserve it?
-        // Usually splitItem is used for Status Change.
-        // If I change status to "Damaged", I provide "faultDescription".
-        // If I change status to "In Stock", I provide nothing. It becomes null.
-        
         const targetFaultDescription = splitItemData && 'faultDescription' in splitItemData
             ? (splitItemData.faultDescription ?? null) // Explicitly passed, so use it (or null if passed undefined/null)
             : (newStatus === itemToSplit.itemStatus ? itemToSplit.faultDescription : null); 
             // If status is same, preserve existing. If status changes and no new desc provided, assume cleared/null.
-            // This covers "Repaired" case (status change, no desc provided -> null).
             
         const newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
@@ -278,11 +267,12 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
-            faultDescription: targetFaultDescription,
+            faultDescription: targetFaultDescription ?? null, // Ensure null if undefined/null to persist "no fault"
         };
         
-        // Cleanup undefined keys, but PRESERVE null for faultDescription to persist "no fault" explicitly
+        // Cleanup undefined keys, but PRESERVE null for faultDescription
         Object.keys(newDocPayload).forEach(key => {
+            if (key === 'faultDescription') return; // Don't delete faultDescription
             if ((newDocPayload as any)[key] === undefined) {
                 delete (newDocPayload as any)[key];
             }

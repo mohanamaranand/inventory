@@ -56,7 +56,7 @@ export function SalesPurchasesChart() {
       let formatLabel: (date: Date) => string;
 
       if (view === 'monthly') {
-        formatLabel = (date) => format(date, 'MMM');
+        formatLabel = (date) => format(date, 'MMM yy'); // Differentiate months across years
         for (let i = 11; i >= 0; i--) {
           const date = subMonths(now, i);
           const label = formatLabel(date);
