@@ -80,7 +80,7 @@ type InventoryFormProps = {
 };
 
 export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: InventoryFormProps) {
-  const { addItem, editAndMergeItem, getItem, splitItem } = useInventory();
+  const { addItem, editAndMergeItem, getItem, splitItem, updateItem } = useInventory();
   const { toast } = useToast();
   const { user } = useUser();
   const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
@@ -161,7 +161,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
     });
 
     try {
-        const submissionValues: Omit<InventoryItem, 'id'> = {
+        const submissionValues: any = {
             ...values,
             imageUrl: values.imageUrl || '',
             productDetails: values.productDetails || '',
@@ -171,6 +171,13 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             purchaseDate: values.purchaseDate,
             salesDate: values.salesDate,
         };
+
+        // Remove undefined keys to avoid Firestore error "Unsupported field value: undefined"
+        Object.keys(submissionValues).forEach(key => {
+            if (submissionValues[key] === undefined) {
+                delete submissionValues[key];
+            }
+        });
 
         if (showSplit && values.splitQuantity && values.splitQuantity > 0) {
             if (!editingItem || values.splitQuantity > editingItem.quantity) {
@@ -189,8 +196,20 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             );
             toast({ id: toastId, variant: "default", title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
         } else if (editingItem && itemId) {
-            await editAndMergeItem(itemId, submissionValues);
-            toast({ id: toastId, variant: "default", title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
+             // Check if merge-relevant fields have changed
+            const isMergeFieldsChanged = 
+                editingItem.itemStdCode !== submissionValues.itemStdCode ||
+                editingItem.itemStatus !== submissionValues.itemStatus ||
+                (editingItem.productDetails || '') !== (submissionValues.productDetails || '') ||
+                editingItem.purchaseInvoiceNumber !== submissionValues.purchaseInvoiceNumber;
+
+            if (isMergeFieldsChanged) {
+                 await editAndMergeItem(itemId, submissionValues);
+                 toast({ id: toastId, variant: "default", title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
+            } else {
+                 await updateItem(itemId, submissionValues);
+                 toast({ id: toastId, variant: "default", title: "Item Updated", description: `"${submissionValues.productName}" has been updated.` });
+            }
         } else {
             await addItem(submissionValues);
             toast({ id: toastId, variant: "default", title: "Item Added", description: `"${submissionValues.productName}" has been added to inventory.` });
