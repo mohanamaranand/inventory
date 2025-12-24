@@ -56,6 +56,7 @@ export interface InventoryItem {
   salesDate?: Timestamp | Date;
   customerId?: string;
   imageUrl?: string;
+  faultDescription?: string;
 }
 
 export interface VehiclePart {

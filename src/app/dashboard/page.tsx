@@ -7,13 +7,15 @@ import { SalesPurchasesChart } from "@/components/dashboard/sales-purchases-char
 import { ProductionSummary } from "@/components/dashboard/production-summary";
 import { StatusWidget } from "@/components/dashboard/status-widget";
 import { CategoryWidget } from "@/components/dashboard/category-widget";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/firebase";
 import { ProfitLossChart } from "@/components/dashboard/profit-loss-chart";
 import { TopPerformingProducts } from "@/components/dashboard/top-performing-products";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { LowStockWidget } from "@/components/dashboard/low-stock-widget";
+import { FaultyVehiclesWidget } from "@/components/dashboard/faulty-vehicles-widget";
+import { InventoryForm } from "@/components/inventory/inventory-form";
 
 function DashboardLoadingSkeleton() {
     return (
@@ -42,6 +44,19 @@ function DashboardLoadingSkeleton() {
 export default function DashboardPage() {
     const { user, loading } = useUser();
     const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+    
+    const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+
+    const handleEdit = (id: string) => {
+        setEditingItemId(id);
+        setIsFormOpen(true);
+    };
+
+    const handleFormSubmit = () => {
+        setIsFormOpen(false);
+        setEditingItemId(null);
+    };
 
     return (
         <Suspense fallback={<DashboardLoadingSkeleton />}>
@@ -67,12 +82,19 @@ export default function DashboardPage() {
                             </div>
                             <div className="lg:col-span-3 space-y-6 flex flex-col gap-6">
                                 <RecentActivity />
+                                <FaultyVehiclesWidget onEdit={handleEdit} />
                                 <LowStockWidget />
                                 <CategoryWidget />
                                 <StatusWidget />
                             </div>
                         </div>
                     </div>
+                    <InventoryForm 
+                        open={isFormOpen} 
+                        onOpenChange={setIsFormOpen} 
+                        onFormSubmit={handleFormSubmit}
+                        itemId={editingItemId}
+                    />
                 </>
             )}
         </Suspense>

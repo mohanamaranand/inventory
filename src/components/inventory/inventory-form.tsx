@@ -70,6 +70,7 @@ const formSchema = z.object({
   salesDate: z.date().optional(),
   splitQuantity: z.coerce.number().int().min(0).optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
+  faultDescription: z.string().optional(),
 });
 
 type InventoryFormProps = {
@@ -105,12 +106,14 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         salesDate: undefined,
         splitQuantity: 0,
         imageUrl: "",
+        faultDescription: "",
       },
   });
 
   const watchStatus = form.watch("itemStatus");
   const showSplit = editingItem && watchStatus && watchStatus !== editingItem.itemStatus;
   const isSoldStatus = watchStatus && SOLD_STATUSES.includes(watchStatus as any);
+  const isFaultStatus = watchStatus === 'Fault' || watchStatus === 'Damaged';
 
   useEffect(() => {
     if (editingItem) {
@@ -130,6 +133,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         salesInvoiceNumber: editingItem.salesInvoiceNumber || "",
         purchasePrice: editingItem.purchasePrice || 0,
         splitQuantity: 0,
+        faultDescription: editingItem.faultDescription || "",
       });
     } else {
       form.reset({
@@ -148,6 +152,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
         salesDate: undefined,
         splitQuantity: 0,
         imageUrl: "",
+        faultDescription: "",
       });
     }
   }, [editingItem, form, open]);
@@ -170,6 +175,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
             itemStatus: values.itemStatus || 'In Stock',
             purchaseDate: values.purchaseDate,
             salesDate: values.salesDate,
+            faultDescription: values.faultDescription,
         };
 
         // Remove undefined keys to avoid Firestore error "Unsupported field value: undefined"
@@ -191,7 +197,8 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 {
                     productDetails: submissionValues.productDetails,
                     salesInvoiceNumber: submissionValues.salesInvoiceNumber,
-                    salesDate: submissionValues.salesDate
+                    salesDate: submissionValues.salesDate,
+                    faultDescription: submissionValues.faultDescription,
                 }
             );
             toast({ id: toastId, variant: "default", title: "Item Split", description: `${values.splitQuantity} units of "${submissionValues.productName}" moved to status "${submissionValues.itemStatus}".` });
@@ -554,6 +561,21 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                                 )}
                             />
                         </div>
+                    )}
+                    {isFaultStatus && (
+                         <FormField
+                            control={form.control}
+                            name="faultDescription"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Fault Description</FormLabel>
+                                <FormControl>
+                                    <Textarea placeholder="Describe the fault or damage..." {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
                     )}
                 </div>
             )}

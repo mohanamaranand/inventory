@@ -76,7 +76,7 @@ interface InventoryContextType extends AllData {
     id: string,
     newStatus: ItemStatus,
     splitQuantity: number,
-    splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }
+    splitItemData?: { productDetails?: string; salesInvoiceNumber?: string; faultDescription?: string }
   ) => Promise<void>;
   deleteItem: (id: string, restock?: boolean) => Promise<void>;
   deleteMultipleItems: (ids: string[], restock?: boolean) => Promise<void>;
@@ -169,21 +169,26 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           getCollectionRef('inventory'),
           where('itemStdCode', '==', item.itemStdCode),
           where('itemStatus', '==', 'In Stock'),
-          where('productDetails', '==', item.productDetails || ''),
-          where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber),
-          limit(1)
+          where('purchaseInvoiceNumber', '==', item.purchaseInvoiceNumber)
         );
   
         const querySnapshot = await getDocs(q);
+        const existingDoc = querySnapshot.docs.find(doc => {
+            const data = doc.data() as InventoryItem;
+            const pdMatch = (data.productDetails || '') === (item.productDetails || '');
+            // For new items (In Stock), faultDescription is typically not set, but if it is, we should respect it.
+            const fdMatch = (data.faultDescription || null) === (item.faultDescription || null);
+            return pdMatch && fdMatch;
+        });
   
-        if (!querySnapshot.empty) {
-          const existingDoc = querySnapshot.docs[0];
+        if (existingDoc) {
           const existingData = existingDoc.data() as InventoryItem;
           const newQuantity = existingData.quantity + item.quantity;
           transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
           const docRef = doc(getCollectionRef('inventory'));
-          transaction.set(docRef, { ...item, itemStatus: 'In Stock' });
+          // Explicitly set faultDescription to null if undefined to ensure consistent querying
+          transaction.set(docRef, { ...item, itemStatus: 'In Stock', faultDescription: item.faultDescription ?? null });
         }
       });
     }
@@ -211,28 +216,32 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
           getCollectionRef('inventory'),
           where('itemStdCode', '==', updatedItemData.itemStdCode),
           where('itemStatus', '==', updatedItemData.itemStatus),
-          where('productDetails', '==', updatedItemData.productDetails || ''),
-          where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber),
-          limit(1)
+          where('purchaseInvoiceNumber', '==', updatedItemData.purchaseInvoiceNumber)
         );
       
         const querySnapshot = await getDocs(q);
+        const existingDoc = querySnapshot.docs.find(doc => {
+             if (doc.id === id) return false;
+             const data = doc.data() as InventoryItem;
+             const pdMatch = (data.productDetails || '') === (updatedItemData.productDetails || '');
+             const fdMatch = (data.faultDescription || null) === (updatedItemData.faultDescription || null);
+             return pdMatch && fdMatch;
+        });
 
-        if (!querySnapshot.empty && querySnapshot.docs[0].id !== id) {
-            const existingDoc = querySnapshot.docs[0];
+        if (existingDoc) {
             const existingData = existingDoc.data() as InventoryItem;
             const newQuantity = existingData.quantity + updatedItemData.quantity;
             transaction.update(existingDoc.ref, { quantity: newQuantity });
         } else {
             const newDocRef = doc(getCollectionRef('inventory'));
-            transaction.set(newDocRef, updatedItemData);
+            transaction.set(newDocRef, { ...updatedItemData, faultDescription: updatedItemData.faultDescription ?? null });
         }
      });
 
   }, [db]);
 
 
-  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string }) => {
+  const splitItem = useCallback(async (id: string, newStatus: ItemStatus, splitQuantity: number, splitItemData?: { productDetails?: string; salesInvoiceNumber?: string; faultDescription?: string }) => {
       await runTransaction(db, async (transaction) => {
         const itemDocRef = doc(db, 'inventory', id);
         const itemDoc = await transaction.get(itemDocRef);
@@ -246,27 +255,56 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const { id: originalId, ...newItemData } = itemToSplit;
+        
+        // Determine the new fault description. 
+        // If splitItemData.faultDescription is provided (even empty string), use it.
+        // If not provided, and we are moving TO a fault status, it might be undefined (which means no fault).
+        // If we are moving FROM a fault status (e.g. repaired), we probably want to clear it (set to null).
+        // The logic `splitItemData?.faultDescription ?? null` means: if provided use it, else null.
+        // But if `newItemData` had a fault description and we are just splitting (same status), we should preserve it?
+        // Usually splitItem is used for Status Change.
+        // If I change status to "Damaged", I provide "faultDescription".
+        // If I change status to "In Stock", I provide nothing. It becomes null.
+        
+        const targetFaultDescription = splitItemData && 'faultDescription' in splitItemData
+            ? (splitItemData.faultDescription ?? null) // Explicitly passed, so use it (or null if passed undefined/null)
+            : (newStatus === itemToSplit.itemStatus ? itemToSplit.faultDescription : null); 
+            // If status is same, preserve existing. If status changes and no new desc provided, assume cleared/null.
+            // This covers "Repaired" case (status change, no desc provided -> null).
+            
         const newDocPayload: Omit<InventoryItem, 'id'> = {
             ...newItemData,
             quantity: splitQuantity,
             itemStatus: newStatus,
             productDetails: splitItemData?.productDetails ?? newItemData.productDetails,
             salesInvoiceNumber: splitItemData?.salesInvoiceNumber ?? (newStatus.includes('Sold') ? newItemData.salesInvoiceNumber : ''),
+            faultDescription: targetFaultDescription,
         };
+        
+        // Cleanup undefined keys, but PRESERVE null for faultDescription to persist "no fault" explicitly
+        Object.keys(newDocPayload).forEach(key => {
+            if ((newDocPayload as any)[key] === undefined) {
+                delete (newDocPayload as any)[key];
+            }
+        });
 
         const q = query(
             getCollectionRef('inventory'),
             where('itemStdCode', '==', newDocPayload.itemStdCode),
             where('itemStatus', '==', newDocPayload.itemStatus),
-            where('productDetails', '==', newDocPayload.productDetails || ''),
-            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber),
-            limit(1)
+            where('purchaseInvoiceNumber', '==', newDocPayload.purchaseInvoiceNumber)
         );
         
         const querySnapshot = await getDocs(q);
+        const existingDoc = querySnapshot.docs.find(doc => {
+            if (doc.id === id) return false;
+             const data = doc.data() as InventoryItem;
+             const pdMatch = (data.productDetails || '') === (newDocPayload.productDetails || '');
+             const fdMatch = (data.faultDescription || null) === (newDocPayload.faultDescription || null);
+             return pdMatch && fdMatch;
+        });
 
-        if (!querySnapshot.empty) {
-            const existingDoc = querySnapshot.docs[0];
+        if (existingDoc) {
             const existingData = existingDoc.data() as InventoryItem;
             transaction.update(existingDoc.ref, { quantity: existingData.quantity + splitQuantity });
         } else {

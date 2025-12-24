@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,7 @@ import { Timestamp } from "firebase/firestore";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar, CalendarIcon, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 
 type ColumnsProps = {
@@ -53,166 +54,239 @@ type ColumnsProps = {
   isPrivilegedUser: boolean;
 };
 
-// Extracted StatusCell component to correctly use hooks
+function StatusUpdateDialog({ 
+    item, 
+    targetStatus, 
+    open, 
+    onOpenChange, 
+    onSubmit 
+}: { 
+    item: InventoryItem, 
+    targetStatus: ItemStatus | null, 
+    open: boolean, 
+    onOpenChange: (open: boolean) => void,
+    onSubmit: (qty: number, status: ItemStatus, data: any) => Promise<void>
+}) {
+    const [splitQuantity, setSplitQuantity] = useState<number | string>(item.quantity > 1 ? 1 : item.quantity);
+    const [salesInvoiceNumber, setSalesInvoiceNumber] = useState("");
+    const [salesDate, setSalesDate] = useState<Date | undefined>(new Date());
+    const [faultDescription, setFaultDescription] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Use a ref to track if the dialog was previously open to detect open transition
+    const wasOpenRef = useRef(open);
+
+    // Reset state ONLY when dialog opens
+    useEffect(() => {
+        if (open && !wasOpenRef.current) {
+            // Dialog just opened
+            setSplitQuantity(item.quantity > 1 ? 1 : item.quantity);
+            if (targetStatus && (targetStatus === 'Fault' || targetStatus === 'Damaged') && item.faultDescription) {
+                setFaultDescription(item.faultDescription);
+            } else {
+                setFaultDescription("");
+            }
+            setSalesInvoiceNumber("");
+            setSalesDate(new Date());
+        }
+        wasOpenRef.current = open;
+    }, [open, item, targetStatus]); 
+    // Note: We include item and targetStatus in dependency array but condition logic prevents reset unless opening.
+    // However, if targetStatus changes while open (not possible with current UI but safe), we might want to update? 
+    // Current UI doesn't allow changing targetStatus while open.
+    
+    if (!targetStatus) return null;
+
+    const isSoldStatus = SOLD_STATUSES.includes(targetStatus as any);
+    const isFaultStatus = targetStatus === 'Fault' || targetStatus === 'Damaged';
+
+    const handleSubmit = async () => {
+        setIsSubmitting(true);
+        try {
+            const splitData: { salesInvoiceNumber?: string; salesDate?: Date; faultDescription?: string } = {};
+            if (isSoldStatus) {
+                splitData.salesInvoiceNumber = salesInvoiceNumber;
+                splitData.salesDate = salesDate;
+            }
+            if (isFaultStatus) {
+                splitData.faultDescription = faultDescription;
+            }
+            await onSubmit(Number(splitQuantity), targetStatus, splitData);
+            onOpenChange(false);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Update Item Status</DialogTitle>
+                    <DialogDescription>
+                        {item.quantity > 1 
+                            ? `Move a specific quantity of "${item.productName}" to the new status "${targetStatus}".`
+                            : `Update status of "${item.productName}" to "${targetStatus}".`
+                        }
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    {item.quantity > 1 && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="split-quantity" className="text-right">
+                                Quantity
+                            </Label>
+                            <Input
+                                id="split-quantity"
+                                type="number"
+                                value={splitQuantity}
+                                onChange={(e) => setSplitQuantity(e.target.value)}
+                                className="col-span-3"
+                                max={item.quantity}
+                                min={1}
+                            />
+                        </div>
+                    )}
+                    
+                    {isSoldStatus && (
+                        <>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="sales-invoice" className="text-right">
+                                    Sales Invoice
+                                </Label>
+                                <Input
+                                    id="sales-invoice"
+                                    value={salesInvoiceNumber}
+                                    onChange={(e) => setSalesInvoiceNumber(e.target.value)}
+                                    className="col-span-3"
+                                    placeholder="Optional"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="sales-date" className="text-right">
+                                    Sales Date
+                                </Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "col-span-3 justify-start text-left font-normal",
+                                                !salesDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {salesDate ? format(salesDate, "PPP") : <span>Pick a date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={salesDate}
+                                            onSelect={setSalesDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </>
+                    )}
+
+                    {isFaultStatus && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="fault-desc" className="text-right">
+                                Fault Description
+                            </Label>
+                            <Textarea
+                                id="fault-desc"
+                                value={faultDescription}
+                                onChange={(e) => setFaultDescription(e.target.value)}
+                                className="col-span-3"
+                                placeholder="Describe the fault or damage..."
+                            />
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+                    <Button type="button" onClick={handleSubmit} disabled={isSubmitting || (item.quantity > 1 && (!splitQuantity || Number(splitQuantity) > item.quantity))}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Confirm
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function StatusCell({ row }: { row: { original: InventoryItem } }) {
   const { splitItem } = useInventory();
   const { toast } = useToast();
   const item = row.original;
-  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newStatus, setNewStatus] = useState<ItemStatus | null>(null);
-  const [splitQuantity, setSplitQuantity] = useState<number | string>("");
-  const [salesInvoiceNumber, setSalesInvoiceNumber] = useState("");
-  const [salesDate, setSalesDate] = useState<Date | undefined>(new Date());
-
-  const isSoldStatus = newStatus && SOLD_STATUSES.includes(newStatus as any);
+  const [targetStatus, setTargetStatus] = useState<ItemStatus | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleStatusChange = (status: ItemStatus) => {
-    if (status !== item.itemStatus) {
-      setNewStatus(status);
-      if (item.quantity > 1) {
-        setSplitQuantity(1); // Default to 1
-        setIsSplitDialogOpen(true);
-      } else {
-        handleSplitSubmit(1, status);
-      }
+    setTargetStatus(status);
+    const needsDialog = item.quantity > 1 || SOLD_STATUSES.includes(status as any) || status === 'Fault' || status === 'Damaged';
+    
+    if (needsDialog) {
+        setIsDialogOpen(true);
+    } else {
+        if (status !== item.itemStatus) {
+            handleSubmit(item.quantity, status, {});
+        }
     }
   };
 
-  const handleSplitSubmit = async (qty: number, status: ItemStatus) => {
-    setIsSubmitting(true);
+  const handleSubmit = async (qty: number, status: ItemStatus, data: any) => {
     const { id: toastId } = toast({
-      title: "Updating Status...",
-      description: `Moving ${qty} units of "${item.productName}" to ${status}.`
+        title: "Updating Status...",
+        description: `Moving ${qty} units of "${item.productName}" to ${status}.`
     });
 
     try {
-      const splitData: { salesInvoiceNumber?: string; salesDate?: Date } = {};
-      if (SOLD_STATUSES.includes(status as any)) {
-        splitData.salesInvoiceNumber = salesInvoiceNumber;
-        splitData.salesDate = salesDate;
-      }
-
-      await splitItem(item.id, status, qty, splitData);
-      toast({
-        id: toastId,
-        variant: 'default',
-        title: "Item Status Updated",
-        description: `${qty} units of "${item.productName}" moved to ${status}.`,
-      });
+        await splitItem(item.id, status, qty, data);
+        toast({
+            id: toastId,
+            variant: 'default',
+            title: "Item Status Updated",
+            description: `${qty} units of "${item.productName}" moved to ${status}.`,
+        });
     } catch (error: any) {
-      toast({
-        id: toastId,
-        variant: 'destructive',
-        title: 'Operation Failed',
-        description: error.message || 'Could not update item status.',
-      });
-    } finally {
-      setIsSubmitting(false);
-      setIsSplitDialogOpen(false);
-      setNewStatus(null);
-      setSplitQuantity("");
-      setSalesInvoiceNumber("");
-      setSalesDate(new Date());
+        toast({
+            id: toastId,
+            variant: 'destructive',
+            title: 'Operation Failed',
+            description: error.message || 'Could not update item status.',
+        });
+        throw error; // Re-throw to handle loading state in dialog
     }
   };
 
-  if (item.itemCategory === 'Assembled Vehicle' || item.itemCategory === 'Assembled Battery') {
-    return <Badge variant="default">{item.itemStatus}</Badge>;
-  }
-
   return (
     <>
-      <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
-        <Select onValueChange={handleStatusChange} value={item.itemStatus} disabled={isSubmitting}>
-          <SelectTrigger className="w-[150px] text-xs h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ITEM_STATUSES.map((status) => (
-              <SelectItem key={status} value={status} disabled={status === item.itemStatus}>
-                {status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Split Item Quantity</DialogTitle>
-            <DialogDescription>
-              Move a specific quantity of "{item.productName}" to the new status "{newStatus}". The current quantity is {item.quantity}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="split-quantity" className="text-right">
-                Quantity
-              </Label>
-              <Input
-                id="split-quantity"
-                type="number"
-                value={splitQuantity}
-                onChange={(e) => setSplitQuantity(e.target.value)}
-                className="col-span-3"
-                max={item.quantity}
-                min={1}
-              />
-            </div>
-            {isSoldStatus && (
-              <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="sales-invoice" className="text-right">
-                    Sales Invoice
-                  </Label>
-                  <Input
-                    id="sales-invoice"
-                    value={salesInvoiceNumber}
-                    onChange={(e) => setSalesInvoiceNumber(e.target.value)}
-                    className="col-span-3"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="sales-date" className="text-right">
-                    Sales Date
-                  </Label>
-                   <Popover>
-                      <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "col-span-3 justify-start text-left font-normal",
-                              !salesDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {salesDate ? format(salesDate, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={salesDate}
-                          onSelect={setSalesDate}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                </div>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
-            </DialogClose>
-            <Button type="button" onClick={() => handleSplitSubmit(Number(splitQuantity), newStatus!)} disabled={isSubmitting || !splitQuantity || Number(splitQuantity) > item.quantity}>
-               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-               Confirm Split
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <StatusUpdateDialog 
+        item={item} 
+        targetStatus={targetStatus} 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen} 
+        onSubmit={handleSubmit}
+      />
+      <Select onValueChange={handleStatusChange} value={item.itemStatus}>
+        <SelectTrigger className="w-[150px] text-xs h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ITEM_STATUSES.map((status) => (
+            <SelectItem key={status} value={status}>
+              {status}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </>
   );
 }
@@ -278,6 +352,9 @@ export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): Colum
               <div className="flex flex-col">
                 <span className="font-medium">{item.productName}</span>
                 <span className="text-xs text-muted-foreground">{item.itemStdCode}</span>
+                {item.faultDescription && (
+                    <Badge variant="destructive" className="mt-1 w-fit text-[10px] px-1 py-0">{item.faultDescription}</Badge>
+                )}
               </div>
             </div>
           );
