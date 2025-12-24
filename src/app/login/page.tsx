@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Warehouse, LogIn, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,6 +22,7 @@ export default function LoginPage() {
     const [loginPassword, setLoginPassword] = useState('');
     const [signUpEmail, setSignUpEmail] = useState('');
     const [signUpPassword, setSignUpPassword] = useState('');
+    const [signUpRole, setSignUpRole] = useState('employee');
     const [loading, setLoading] = useState(false);
 
     const handleSignIn = async (e: React.FormEvent) => {
@@ -48,27 +50,25 @@ export default function LoginPage() {
             const userCredential = await createUserWithEmailAndPassword(auth, signUpEmail, signUpPassword);
             const user = userCredential.user;
 
-            // Assign role based on email
-            let role = 'employee';
-            if (signUpEmail.toLowerCase() === 'shreechakra.e.m@gmail.com') {
-                role = 'owner';
-            }
+            const isSuperAdmin = signUpEmail.toLowerCase() === 'shreechakra.e.m@gmail.com';
 
             // Create user document in Firestore
             await setDoc(doc(db, "users", user.uid), {
                 uid: user.uid,
                 email: user.email,
-                role: role,
+                role: isSuperAdmin ? 'owner' : signUpRole,
+                approved: isSuperAdmin ? true : false,
             });
 
             toast({
                 title: 'Account Created',
-                description: "You have been successfully signed up. Please sign in.",
+                description: "You have been successfully signed up. Please wait for an administrator to approve your account.",
             });
             // Switch to sign-in tab after successful sign-up could be a good UX improvement,
             // but for now, we just clear the form.
             setSignUpEmail('');
             setSignUpPassword('');
+            setSignUpRole('employee');
         } catch (error: any) {
             console.error("Sign-up error:", error);
             toast({
@@ -122,6 +122,19 @@ export default function LoginPage() {
                                 <div className="space-y-2">
                                     <Label htmlFor="signup-password">Password</Label>
                                     <Input id="signup-password" type="password" required value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Account Type</Label>
+                                    <RadioGroup defaultValue="employee" value={signUpRole} onValueChange={setSignUpRole} className="flex flex-row space-x-4">
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="employee" id="role-employee" />
+                                            <Label htmlFor="role-employee">Employee</Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="owner" id="role-owner" />
+                                            <Label htmlFor="role-owner">Owner</Label>
+                                        </div>
+                                    </RadioGroup>
                                 </div>
                                 <Button type="submit" className="w-full" variant="secondary" disabled={loading}>
                                      <UserPlus className="mr-2 h-4 w-4" />

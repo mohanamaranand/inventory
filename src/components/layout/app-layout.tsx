@@ -9,12 +9,16 @@ import { usePathname } from "next/navigation";
 import { Skeleton } from "../ui/skeleton";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/firebase";
+import { signOut } from "firebase/auth";
+import { Button } from "@/components/ui/button";
 
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useUser();
     const pathname = usePathname();
     const router = useRouter();
+    const auth = useAuth();
 
     useEffect(() => {
         if (loading) return; // Wait for the auth state to be determined
@@ -45,6 +49,19 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
     // This prevents rendering the main layout for a split second before redirecting.
     if (!user) {
         return null;
+    }
+
+    if (!user.approved) {
+         return (
+             <div className="flex h-screen w-screen items-center justify-center flex-col gap-4 p-4 text-center">
+                <div className="text-2xl font-bold">Account Pending Approval</div>
+                <p className="text-muted-foreground max-w-md">
+                    Your account is currently waiting for approval from an administrator. 
+                    Please contact your manager or system administrator.
+                </p>
+                <Button onClick={() => signOut(auth)}>Sign Out</Button>
+            </div>
+        );
     }
     
     // If we have a user, render the full application layout.

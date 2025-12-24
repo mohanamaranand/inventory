@@ -34,16 +34,21 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return doc(db, 'users', firebaseUser.uid);
   }, [db, firebaseUser]);
   
-  const { data: userProfile, isLoading: loadingProfile } = useDoc<{ role: UserRole, displayName?: string }>(userDocRef);
+  const { data: userProfile, isLoading: loadingProfile } = useDoc<{ role: UserRole, displayName?: string, approved?: boolean }>(userDocRef);
 
   const user = useMemo(() => {
     if (!firebaseUser) return null;
+    // Default approved to true if undefined to support existing users.
+    // New users should have this field explicitly set to false in the database.
+    const isApproved = userProfile?.approved ?? true;
+
     return {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
       displayName: userProfile?.displayName || firebaseUser.displayName || firebaseUser.email,
       photoURL: firebaseUser.photoURL,
       role: userProfile?.role || 'employee',
+      approved: isApproved,
     };
   }, [firebaseUser, userProfile]);
 

@@ -114,6 +114,7 @@ export interface User {
   displayName: string | null;
   photoURL: string | null;
   role: UserRole;
+  approved: boolean;
 }
 
 export interface AllData {

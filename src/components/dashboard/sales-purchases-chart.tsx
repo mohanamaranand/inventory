@@ -24,6 +24,7 @@ import { formatCurrency } from "@/lib/utils"
 import { Timestamp } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { format, startOfMonth, startOfYear, startOfDay, subMonths, subYears, subDays, endOfDay, endOfMonth, endOfYear } from 'date-fns';
+import { useUser } from "@/firebase/auth/use-user"
 
 const chartConfig = {
   sales: {
@@ -36,13 +37,16 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-type ChartData = { label: string; sales: number; purchases: number }[];
+type ChartData = { label: string; sales: number; purchases?: number }[];
 type View = 'daily' | 'monthly' | 'yearly';
 
 export function SalesPurchasesChart() {
   const { inventory } = useInventory()
+  const { user } = useUser();
   const [view, setView] = React.useState<View>('monthly');
   const [chartData, setChartData] = React.useState<ChartData>([]);
+  
+  const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
 
   React.useEffect(() => {
     const processData = () => {
@@ -78,8 +82,8 @@ export function SalesPurchasesChart() {
       }
 
       inventory.forEach(item => {
-        // Process Purchases
-        if (item.purchaseDate) {
+        // Process Purchases (only if privileged)
+        if (isPrivilegedUser && item.purchaseDate) {
           const purchaseDate = item.purchaseDate instanceof Timestamp ? item.purchaseDate.toDate() : new Date(item.purchaseDate);
           if (!isNaN(purchaseDate.getTime())) {
             const label = formatLabel(purchaseDate);
@@ -103,17 +107,22 @@ export function SalesPurchasesChart() {
         }
       });
       
-      const data: ChartData = labels.map(label => ({
-        label,
-        sales: dataMap.get(label)?.sales || 0,
-        purchases: dataMap.get(label)?.purchases || 0,
-      }));
+      const data: ChartData = labels.map(label => {
+        const item = {
+             label,
+            sales: dataMap.get(label)?.sales || 0,
+        };
+        if (isPrivilegedUser) {
+             (item as any).purchases = dataMap.get(label)?.purchases || 0;
+        }
+        return item;
+      });
 
       setChartData(data);
     };
 
     processData();
-  }, [inventory, view]);
+  }, [inventory, view, isPrivilegedUser]);
 
   const description = {
     daily: "Last 30 days",
@@ -126,7 +135,7 @@ export function SalesPurchasesChart() {
       <CardHeader>
         <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-                <CardTitle>Sales & Purchases Overview</CardTitle>
+                <CardTitle>{isPrivilegedUser ? "Sales & Purchases Overview" : "Sales Overview"}</CardTitle>
                 <CardDescription>{description[view]}</CardDescription>
             </div>
             <div className="flex gap-2">
@@ -162,7 +171,7 @@ export function SalesPurchasesChart() {
               }
             />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="purchases" fill="var(--color-purchases)" radius={4} />
+            {isPrivilegedUser && <Bar dataKey="purchases" fill="var(--color-purchases)" radius={4} />}
             <Bar dataKey="sales" fill="var(--color-sales)" radius={4} />
           </BarChart>
         </ChartContainer>

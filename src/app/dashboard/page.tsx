@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/firebase";
 import { ProfitLossChart } from "@/components/dashboard/profit-loss-chart";
 import { TopPerformingProducts } from "@/components/dashboard/top-performing-products";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { LowStockWidget } from "@/components/dashboard/low-stock-widget";
 
 function DashboardLoadingSkeleton() {
     return (
@@ -63,7 +65,9 @@ export default function DashboardPage() {
                                 <SalesPurchasesChart />
                                 <ProductionSummary />
                             </div>
-                            <div className="lg:col-span-3 space-y-6">
+                            <div className="lg:col-span-3 space-y-6 flex flex-col gap-6">
+                                <RecentActivity />
+                                <LowStockWidget />
                                 <CategoryWidget />
                                 <StatusWidget />
                             </div>

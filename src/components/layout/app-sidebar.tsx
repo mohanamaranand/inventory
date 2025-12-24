@@ -22,6 +22,7 @@ import {
   ClipboardList,
   LogOut,
   User as UserIcon,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/layout/notification-bell";
@@ -79,6 +80,18 @@ export function AppSidebar() {
     router.push('/login');
   };
 
+  const items = React.useMemo(() => {
+    const list = [...menuItems];
+    if (user?.role === 'owner') {
+       list.push({
+        href: "/admin/users",
+        icon: Shield,
+        label: "User Management",
+      });
+    }
+    return list;
+  }, [user?.role]);
+
   return (
     <Sidebar collapsible="icon" side="left" variant="sidebar">
       <SidebarHeader>
@@ -120,7 +133,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarMenu className="flex-1">
-        {menuItems.map((item) => (
+        {items.map((item) => (
           <SidebarMenuItem key={item.href}>
             <Button
               asChild
