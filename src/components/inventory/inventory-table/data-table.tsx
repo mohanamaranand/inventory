@@ -189,7 +189,7 @@ export function DataTable<TData extends InventoryItem, TValue>({
             Select All Filtered ({table.getFilteredRowModel().rows.length})
           </Button>
         )}
-        {table.getFilteredSelectedRowModel().rows.length > 0 && (
+        {table.getFilteredSelectedRowModel().rows.length > 0 && isPrivilegedUser && (
             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
                 <AlertDialogTrigger asChild>
                     <Button variant="destructive">

@@ -254,7 +254,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 <FormItem>
                   <FormLabel>Product Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Brake Pad Set" {...field} />
+                    <Input placeholder="e.g., Brake Pad Set" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -268,7 +268,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                     <FormItem>
                     <FormLabel>Quantity</FormLabel>
                     <FormControl>
-                        <Input type="number" placeholder="0" {...field} disabled={showSplit} />
+                        <Input type="number" placeholder="0" {...field} disabled={showSplit || (!isPrivilegedUser && !!editingItem)} />
                     </FormControl>
                     <FormMessage />
                     </FormItem>
@@ -281,7 +281,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                     <FormItem>
                     <FormLabel>Unit Price (Sale)</FormLabel>
                     <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                     </FormControl>
                     <FormMessage />
                     </FormItem>
@@ -324,7 +324,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Item Category</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isPrivilegedUser && !!editingItem}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a category" />
@@ -349,7 +349,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                   <FormItem>
                     <FormLabel>Item STD Code</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., AP-1023" {...field} />
+                      <Input placeholder="e.g., AP-1023" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -363,7 +363,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                 <FormItem>
                   <FormLabel>Image URL</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://example.com/image.png" {...field} />
+                    <Input placeholder="https://example.com/image.png" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -391,7 +391,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                   <FormItem>
                     <FormLabel>Purchase Invoice No.</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., INV-2023-001" {...field} />
+                      <Input placeholder="e.g., INV-2023-001" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -404,7 +404,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                   <FormItem>
                     <FormLabel>Vendor Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Global Auto Parts" {...field} />
+                      <Input placeholder="e.g., Global Auto Parts" {...field} disabled={!isPrivilegedUser && !!editingItem} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -427,6 +427,7 @@ export function InventoryForm({ open, onOpenChange, onFormSubmit, itemId }: Inve
                             "w-full pl-3 text-left font-normal",
                             !field.value && "text-muted-foreground"
                           )}
+                          disabled={!isPrivilegedUser && !!editingItem}
                         >
                           {field.value ? (
                             format(field.value, "PPP")

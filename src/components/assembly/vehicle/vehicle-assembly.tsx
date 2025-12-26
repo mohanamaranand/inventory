@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Upload } from "lucide-react";
+import { PlusCircle, Upload, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateModelForm } from "@/components/assembly/create-model-form";
 import { AssembleVehicle } from "@/components/assembly/assemble-vehicle";
@@ -42,6 +42,27 @@ export function VehicleAssembly() {
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
+
+  const handleDownloadTemplate = () => {
+      const templateData = [
+          { 'Model Name': 'EcoRider X1', 'Item STD Code': 'MTR-2000', 'Quantity': 1 },
+          { 'Model Name': 'EcoRider X1', 'Item STD Code': 'WHL-14', 'Quantity': 2 },
+          { 'Model Name': 'CityCruiser Z5', 'Item STD Code': 'MTR-3000', 'Quantity': 1 },
+          { 'Model Name': 'CityCruiser Z5', 'Item STD Code': 'BAT-48V', 'Quantity': 1 },
+      ];
+      
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const wscols = [
+        { wch: 20 }, // Model Name
+        { wch: 20 }, // Item STD Code
+        { wch: 10 }, // Quantity
+      ];
+      worksheet['!cols'] = wscols;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+      XLSX.writeFile(workbook, "vehicle_model_import_template.xlsx");
+  }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -161,7 +182,7 @@ export function VehicleAssembly() {
                     Browse and manage your saved vehicle models.
                   </CardDescription>
                 </div>
-                <div>
+                <div className="flex gap-2">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -169,6 +190,10 @@ export function VehicleAssembly() {
                     className="hidden"
                     accept=".xlsx, .xls"
                   />
+                  <Button variant="outline" onClick={handleDownloadTemplate}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Template
+                  </Button>
                   <Button variant="outline" onClick={handleImportClick}>
                     <Upload className="mr-2 h-4 w-4" />
                     Import Models

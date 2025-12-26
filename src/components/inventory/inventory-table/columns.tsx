@@ -473,11 +473,13 @@ export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): Colum
                       Edit
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <AlertDialogTrigger asChild>
-                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-                        Delete
-                        </DropdownMenuItem>
-                    </AlertDialogTrigger>
+                    {isPrivilegedUser && (
+                        <AlertDialogTrigger asChild>
+                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                            Delete
+                            </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <AlertDialogContent>
@@ -510,12 +512,14 @@ export const defineColumns = ({ onEdit, isPrivilegedUser }: ColumnsProps): Colum
                 <DropdownMenuItem onClick={() => onEdit(item.id)}>
                   Edit
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleDelete(false)}
-                  className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                >
-                  Delete
-                </DropdownMenuItem>
+                 {isPrivilegedUser && (
+                    <DropdownMenuItem
+                    onClick={() => handleDelete(false)}
+                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                    >
+                    Delete
+                    </DropdownMenuItem>
+                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
