@@ -32,10 +32,13 @@ import {
   } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast";
 import { Timestamp } from "firebase/firestore";
+import { useUser } from "@/firebase/auth/use-user";
 
 export function AssembledBatteriesTable() {
   const { assembledBatteries, getBatteryModel, deleteAssembledBattery } = useInventory();
   const { toast } = useToast();
+  const { user } = useUser();
+  const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
 
   const handleDelete = (batteryId: string, modelName: string, serialNumber: string, restock: boolean) => {
     deleteAssembledBattery(batteryId, restock);
@@ -69,7 +72,7 @@ export function AssembledBatteriesTable() {
                 <TableHead>Model Name</TableHead>
                 <TableHead>Serial Number</TableHead>
                 <TableHead>Assembly Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {isPrivilegedUser && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -84,39 +87,41 @@ export function AssembledBatteriesTable() {
                       <TableCell>
                         {formatDate(battery.assemblyDate)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Assembled Battery?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Do you want to restock the parts from this battery back into inventory, or just delete the battery record?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(battery.id, model?.name || '', battery.serialNumber, false)}>
-                                Delete Only
-                              </AlertDialogAction>
-                              <AlertDialogAction onClick={() => handleDelete(battery.id, model?.name || '', battery.serialNumber, true)}>
-                                Delete and Restock
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
+                      {isPrivilegedUser && (
+                        <TableCell className="text-right">
+                            <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon">
+                                <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Assembled Battery?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Do you want to restock the parts from this battery back into inventory, or just delete the battery record?
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(battery.id, model?.name || '', battery.serialNumber, false)}>
+                                    Delete Only
+                                </AlertDialogAction>
+                                <AlertDialogAction onClick={() => handleDelete(battery.id, model?.name || '', battery.serialNumber, true)}>
+                                    Delete and Restock
+                                </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                            </AlertDialog>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={isPrivilegedUser ? 5 : 4}
                     className="h-24 text-center"
                   >
                     No assembled batteries yet.

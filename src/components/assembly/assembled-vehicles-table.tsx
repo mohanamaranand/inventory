@@ -32,10 +32,14 @@ import {
   } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast";
 import { Timestamp } from "firebase/firestore";
+import { useUser } from "@/firebase/auth/use-user";
 
 export function AssembledVehiclesTable() {
   const { assembledVehicles, getVehicleModel, deleteAssembledVehicle } = useInventory();
   const { toast } = useToast();
+  const { user } = useUser();
+  const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
+
 
   const handleDelete = (vehicleId: string, modelName: string, chassisNumber: string, restock: boolean) => {
     deleteAssembledVehicle(vehicleId, restock);
@@ -70,7 +74,7 @@ export function AssembledVehiclesTable() {
                 <TableHead>Chassis Number</TableHead>
                 <TableHead>Motor Number</TableHead>
                 <TableHead>Assembly Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {isPrivilegedUser && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -86,39 +90,41 @@ export function AssembledVehiclesTable() {
                       <TableCell>
                         {formatDate(vehicle.assemblyDate)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Do you want to restock the parts from this vehicle back into inventory, or just delete the vehicle record?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, false)}>
-                                Delete Only
-                              </AlertDialogAction>
-                              <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, true)}>
-                                Delete and Restock
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
+                      {isPrivilegedUser && (
+                        <TableCell className="text-right">
+                            <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon">
+                                <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Assembled Vehicle?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Do you want to restock the parts from this vehicle back into inventory, or just delete the vehicle record?
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, false)}>
+                                    Delete Only
+                                </AlertDialogAction>
+                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, true)}>
+                                    Delete and Restock
+                                </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                            </AlertDialog>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={isPrivilegedUser ? 6 : 5}
                     className="h-24 text-center"
                   >
                     No assembled vehicles yet.

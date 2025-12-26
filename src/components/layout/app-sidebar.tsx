@@ -62,11 +62,6 @@ const menuItems = [
       icon: ClipboardList,
       label: "Reports"
   },
-  {
-    href: "/data",
-    icon: Database,
-    label: "Data Management",
-  }
 ];
 
 export function AppSidebar() {
@@ -83,6 +78,11 @@ export function AppSidebar() {
   const items = React.useMemo(() => {
     const list = [...menuItems];
     if (user?.role === 'owner') {
+       list.push({
+         href: "/data",
+         icon: Database,
+         label: "Data Management",
+       });
        list.push({
         href: "/admin/users",
         icon: Shield,

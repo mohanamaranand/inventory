@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Upload, Download } from "lucide-react";
+import { PlusCircle, Upload, Download, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateModelForm } from "@/components/assembly/create-model-form";
 import { AssembleVehicle } from "@/components/assembly/assemble-vehicle";
@@ -21,6 +21,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import type { VehicleModel } from "@/lib/types";
 import { AssembledVehiclesTable } from "@/components/assembly/assembled-vehicles-table";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+
 
 export function VehicleAssembly() {
   const [isSheetOpen, setSheetOpen] = useState(false);
@@ -28,6 +45,11 @@ export function VehicleAssembly() {
   const { vehicleModels, addVehicleModel, getItemByStdCode } = useInventory();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const [previewModels, setPreviewModels] = useState<Omit<VehicleModel, "id">[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
 
   const handleOpenSheet = (modelId: string | null = null) => {
     setSelectedModelId(modelId);
@@ -122,14 +144,8 @@ export function VehicleAssembly() {
           return;
         }
         
-        modelsToCreate.forEach((model) => {
-          addVehicleModel(model);
-        });
-
-        toast({
-          title: "Import Complete",
-          description: `${modelsToCreate.size} new vehicle models have been added.`,
-        });
+        setPreviewModels(Array.from(modelsToCreate.values()));
+        setIsPreviewOpen(true);
 
       } catch (error) {
         console.error("Error processing Excel file:", error);
@@ -147,6 +163,29 @@ export function VehicleAssembly() {
     reader.readAsArrayBuffer(file);
   };
 
+  const confirmImport = async () => {
+      setIsImporting(true);
+      try {
+          for (const model of previewModels) {
+              await addVehicleModel(model);
+          }
+          toast({
+              title: "Import Complete",
+              description: `${previewModels.length} new vehicle models have been added.`,
+          });
+          setIsPreviewOpen(false);
+          setPreviewModels([]);
+      } catch (error: any) {
+          toast({
+              variant: "destructive",
+              title: "Import Failed",
+              description: error.message || "Could not save models.",
+          });
+      } finally {
+          setIsImporting(false);
+      }
+  }
+
   return (
     <>
       <div className="flex justify-end mb-4">
@@ -162,6 +201,46 @@ export function VehicleAssembly() {
         onFormSubmit={handleCloseSheet}
         modelId={selectedModelId}
       />
+      
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                  <DialogTitle>Confirm Model Import</DialogTitle>
+                  <DialogDescription>
+                      Review the vehicle models to be created.
+                  </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="h-[300px] border rounded-md">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Model Name</TableHead>
+                              <TableHead>Parts Count</TableHead>
+                              <TableHead>First Part (Preview)</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {previewModels.map((model, i) => (
+                              <TableRow key={i}>
+                                  <TableCell className="font-medium">{model.name}</TableCell>
+                                  <TableCell>{model.parts.length}</TableCell>
+                                  <TableCell>
+                                      {model.parts[0]?.itemStdCode} (x{model.parts[0]?.quantity})
+                                      {model.parts.length > 1 && ` +${model.parts.length - 1} more`}
+                                  </TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Cancel</Button>
+                  <Button onClick={confirmImport} disabled={isImporting}>
+                      {isImporting ? "Importing..." : "Confirm & Import"}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="assemble">
         <TabsList className="grid w-full grid-cols-3">

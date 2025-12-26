@@ -4,11 +4,30 @@ import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useInventory } from '@/context/inventory-context-firebase';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, Download } from 'lucide-react';
+import { PlusCircle, Upload, Download, AlertTriangle } from 'lucide-react';
 import { InventoryForm } from '@/components/inventory/inventory-form';
 import { DataTable } from '@/components/inventory/inventory-table/data-table';
 import { useToast } from '@/hooks/use-toast';
 import { ITEM_CATEGORIES, InventoryItem } from '@/lib/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatCurrency } from '@/lib/utils';
+
 
 export function InventoryClient() {
   const { addBatchItems } = useInventory();
@@ -16,6 +35,11 @@ export function InventoryClient() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const [previewData, setPreviewData] = useState<Omit<InventoryItem, 'id'>[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
 
   const handleAddItem = () => {
     setEditingItemId(null);
@@ -96,11 +120,6 @@ export function InventoryClient() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const { id: toastId } = toast({
-      title: 'Importing Data...',
-      description: 'Parsing Excel file and processing rows. Please wait.',
-    });
-
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -155,32 +174,29 @@ export function InventoryClient() {
           };
           newItems.push(itemData);
         });
-        
+
         if (newItems.length > 0) {
-          await addBatchItems(newItems);
+            setPreviewData(newItems);
+            setIsPreviewOpen(true);
+        } else {
+             toast({
+                variant: 'destructive',
+                title: 'No Valid Data',
+                description: "No valid inventory items were found in the file.",
+            });
         }
 
-        const descriptions = [];
-        if (newItems.length > 0)
-          descriptions.push(`${newItems.length} items processed for import.`);
-        if (skippedCodeCount > 0)
-          descriptions.push(
-            `${skippedCodeCount} rows skipped due to missing 'Item STD Code'.`
-          );
-        if (skippedCategoryCount > 0)
-          descriptions.push(
-            `${skippedCategoryCount} rows skipped due to an invalid 'Item Category'.`
-          );
+        if (skippedCodeCount > 0 || skippedCategoryCount > 0) {
+            toast({
+                variant: 'warning',
+                title: 'Rows Skipped',
+                description: `${skippedCodeCount} rows missing Item Code, ${skippedCategoryCount} rows with invalid Category.`,
+            });
+        }
 
-        toast({
-          id: toastId,
-          title: 'Import Complete',
-          description: descriptions.join(' ') || "No new data to import.",
-        });
       } catch (error: any) {
         console.error('Error processing Excel file:', error);
         toast({
-          id: toastId,
           variant: 'destructive',
           title: 'Import Failed',
           description: error.message || "There was an error processing the Excel file. Please ensure it's a valid .xlsx file and data format is correct.",
@@ -193,6 +209,27 @@ export function InventoryClient() {
     };
     reader.readAsArrayBuffer(file);
   };
+  
+  const confirmImport = async () => {
+      setIsImporting(true);
+      try {
+          await addBatchItems(previewData);
+          toast({
+              title: 'Import Complete',
+              description: `Successfully processed ${previewData.length} items.`,
+          });
+          setIsPreviewOpen(false);
+          setPreviewData([]);
+      } catch (error: any) {
+          toast({
+              variant: "destructive",
+              title: "Import Failed",
+              description: error.message || "An error occurred while saving the items."
+          });
+      } finally {
+          setIsImporting(false);
+      }
+  }
 
   return (
     <>
@@ -224,6 +261,59 @@ export function InventoryClient() {
         onFormSubmit={closeSheet}
         itemId={editingItemId}
       />
+      
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>Confirm Import</DialogTitle>
+                <DialogDescription>
+                    Please review the data before importing. This action will add {previewData.length} items to your inventory.
+                    Existing items with the same Item Code and details will be updated (quantity added).
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[400px] border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Item Code</TableHead>
+                            <TableHead>Product Name</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Quantity</TableHead>
+                            <TableHead>Unit Price</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {previewData.slice(0, 100).map((item, i) => (
+                            <TableRow key={i}>
+                                <TableCell className="font-medium">{item.itemStdCode}</TableCell>
+                                <TableCell>{item.productName}</TableCell>
+                                <TableCell>{item.itemCategory}</TableCell>
+                                <TableCell>{item.quantity}</TableCell>
+                                <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                            </TableRow>
+                        ))}
+                        {previewData.length > 100 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                                    ... and {previewData.length - 100} more items
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </ScrollArea>
+            <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <span>Ensure your "Item STD Code" is unique for new items. Matching codes will be treated as restocks.</span>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Cancel</Button>
+                <Button onClick={confirmImport} disabled={isImporting}>
+                    {isImporting ? "Importing..." : "Confirm & Import"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DataTable
         data={useInventory().inventory}
