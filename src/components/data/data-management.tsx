@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -26,7 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Upload, Trash2 } from "lucide-react";
-import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, AllData } from "@/lib/types";
+import type { AssembledBattery, AssembledVehicle, BatteryModel, Customer, InventoryItem, AllData, VehicleModel } from "@/lib/types";
+import { SOLD_STATUSES } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
 
 export function DataManagement() {
@@ -51,16 +51,53 @@ export function DataManagement() {
   }
 
   const handleDownload = () => {
+    // 1. Inventory Sheet
     const inventorySheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
         ...item,
         purchaseDate: toDateOrString(item.purchaseDate),
         salesDate: item.salesDate ? toDateOrString(item.salesDate) : undefined,
     })));
+
+    // 2. Vehicle Models Sheet
     const vehicleModelsSheet = XLSX.utils.json_to_sheet(vehicleModels.map(vm => ({ ...vm, parts: JSON.stringify(vm.parts) })));
+
+    // 3. Assembled Vehicles Sheet
     const assembledVehiclesSheet = XLSX.utils.json_to_sheet(assembledVehicles.map(v => ({...v, assemblyDate: toDateOrString(v.assemblyDate)})));
+
+    // 4. Battery Models Sheet
     const batteryModelsSheet = XLSX.utils.json_to_sheet(batteryModels.map(bm => ({...bm, parts: JSON.stringify(bm.parts) })));
+
+    // 5. Assembled Batteries Sheet
     const assembledBatteriesSheet = XLSX.utils.json_to_sheet(assembledBatteries.map(b => ({...b, assemblyDate: toDateOrString(b.assemblyDate)})));
+
+    // 6. Customers Sheet
     const customersSheet = XLSX.utils.json_to_sheet(customers);
+
+    // 7. Sales History Sheet (New)
+    // Filter inventory for sold items and enrich with customer details
+    const salesData = inventory
+      .filter(item => 
+        item.salesInvoiceNumber || 
+        (item.itemStatus && (SOLD_STATUSES as readonly string[]).includes(item.itemStatus))
+      )
+      .map(item => {
+        const customer = customers.find(c => c.id === item.customerId);
+        return {
+          salesInvoiceNumber: item.salesInvoiceNumber,
+          salesDate: item.salesDate ? toDateOrString(item.salesDate) : undefined,
+          customerName: customer ? customer.name : 'Unknown',
+          customerPhone: customer ? customer.phone : '',
+          customerEmail: customer ? customer.email : '',
+          productName: item.productName,
+          itemStdCode: item.itemStdCode,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.unitPrice * item.quantity, // Assuming unitPrice is the selling price here, or we might need a separate salesPrice field if different
+          itemStatus: item.itemStatus,
+          purchaseInvoiceNumber: item.purchaseInvoiceNumber, // Traceability
+        };
+      });
+    const salesSheet = XLSX.utils.json_to_sheet(salesData);
 
 
     const workbook = XLSX.utils.book_new();
@@ -70,6 +107,7 @@ export function DataManagement() {
     XLSX.utils.book_append_sheet(workbook, batteryModelsSheet, "Battery Models");
     XLSX.utils.book_append_sheet(workbook, assembledBatteriesSheet, "Assembled Batteries");
     XLSX.utils.book_append_sheet(workbook, customersSheet, "Customers");
+    XLSX.utils.book_append_sheet(workbook, salesSheet, "Sales History");
 
 
     const today = new Date().toISOString().split("T")[0];
@@ -77,7 +115,7 @@ export function DataManagement() {
 
     toast({
       title: "Backup Downloaded",
-      description: "Your data has been successfully exported to an Excel file.",
+      description: "Your data has been successfully exported to an Excel file, including a detailed Sales History.",
     });
   };
 
