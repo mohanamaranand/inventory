@@ -62,6 +62,45 @@ export function CustomerClient() {
       description: "Your customer list has been downloaded.",
     });
   };
+  
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'Name': 'John Doe Corp',
+        'Contact Person': 'John Doe',
+        'Phone': '9876543210',
+        'Email': 'john@example.com',
+        'Address': '123 Business St, Tech City',
+        'GST Number': '29ABCDE1234F1Z5',
+        'Aadhar Number': '123412341234'
+      },
+      {
+        'Name': 'Jane Smith Enterprises',
+        'Contact Person': 'Jane Smith',
+        'Phone': '9123456780',
+        'Email': 'jane@example.com',
+        'Address': '456 Industry Ave, Metro City',
+        'GST Number': '',
+        'Aadhar Number': ''
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const wscols = [
+      { wch: 25 }, // Name
+      { wch: 20 }, // Contact Person
+      { wch: 15 }, // Phone
+      { wch: 25 }, // Email
+      { wch: 35 }, // Address
+      { wch: 20 }, // GST
+      { wch: 15 }, // Aadhar
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Customer Template');
+    XLSX.writeFile(workbook, 'customer_import_template.xlsx');
+  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -80,6 +119,8 @@ export function CustomerClient() {
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
+        let importedCount = 0;
+
         json.forEach(row => {
           const name = row['name'] || row['Name'];
           if (!name) return; // Skip rows without a name
@@ -90,12 +131,15 @@ export function CustomerClient() {
             phone: String(row['phone'] || row['Phone'] || ''),
             email: row['email'] || row['Email'] || '',
             address: row['address'] || row['Address'] || '',
+            gstNumber: String(row['gstNumber'] || row['GST Number'] || ''),
+            aadharNumber: String(row['aadharNumber'] || row['Aadhar Number'] || ''),
           });
+          importedCount++;
         });
 
         toast({
           title: "Import Complete",
-          description: "Customer data has been imported.",
+          description: `${importedCount} customers have been imported.`,
         });
 
       } catch (error) {
@@ -124,6 +168,10 @@ export function CustomerClient() {
           className="hidden"
           accept=".xlsx, .xls"
         />
+        <Button variant="outline" onClick={handleDownloadTemplate}>
+          <Download className="mr-2 h-4 w-4" />
+          Download Template
+        </Button>
         <Button variant="outline" onClick={handleImportClick}>
           <Upload className="mr-2 h-4 w-4" />
           Import
