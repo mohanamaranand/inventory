@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useInventory } from '@/context/inventory-context-firebase';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload } from 'lucide-react';
+import { PlusCircle, Upload, Download } from 'lucide-react';
 import { InventoryForm } from '@/components/inventory/inventory-form';
 import { DataTable } from '@/components/inventory/inventory-table/data-table';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +34,62 @@ export function InventoryClient() {
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'Purchase Invoice Number': 'INV-001',
+        'Vendor Name': 'ABC Suppliers',
+        'Purchase Date': new Date(),
+        'Item STD Code': 'STD-123',
+        'Item Category': 'Vehicle Part',
+        'Product Name': 'Brake Pad',
+        'Product Details': 'Front wheel brake pad',
+        'Quantity': 100,
+        'Storage Location': 'Shelf A1',
+        'Unit Price': 50,
+        'Purchase Price': 40,
+        'Image URL': 'http://example.com/image.jpg'
+      },
+      {
+        'Purchase Invoice Number': 'INV-002',
+        'Vendor Name': 'XYZ Corp',
+        'Purchase Date': new Date(),
+        'Item STD Code': 'BAT-456',
+        'Item Category': 'Battery Part',
+        'Product Name': 'Lithium Cell',
+        'Product Details': '3.7V 2500mAh',
+        'Quantity': 500,
+        'Storage Location': 'Bin B2',
+        'Unit Price': 10,
+        'Purchase Price': 8,
+        'Image URL': ''
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    
+    // Adjust column widths for better readability
+    const wscols = [
+      { wch: 25 }, // Purchase Invoice Number
+      { wch: 20 }, // Vendor Name
+      { wch: 15 }, // Purchase Date
+      { wch: 15 }, // Item STD Code
+      { wch: 20 }, // Item Category
+      { wch: 20 }, // Product Name
+      { wch: 30 }, // Product Details
+      { wch: 10 }, // Quantity
+      { wch: 20 }, // Storage Location
+      { wch: 10 }, // Unit Price
+      { wch: 15 }, // Purchase Price
+      { wch: 30 }, // Image URL
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+    XLSX.writeFile(workbook, 'inventory_import_template.xlsx');
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,6 +204,10 @@ export function InventoryClient() {
           className="hidden"
           accept=".xlsx, .xls"
         />
+        <Button variant="outline" onClick={handleDownloadTemplate}>
+          <Download className="mr-2 h-4 w-4" />
+          Download Template
+        </Button>
         <Button variant="outline" onClick={handleImportClick}>
           <Upload className="mr-2 h-4 w-4" />
           Import from Excel
