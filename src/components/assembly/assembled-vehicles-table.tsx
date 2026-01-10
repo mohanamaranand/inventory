@@ -35,7 +35,7 @@ import { Timestamp } from "firebase/firestore";
 import { useUser } from "@/firebase/auth/use-user";
 
 export function AssembledVehiclesTable() {
-  const { assembledVehicles, getVehicleModel, deleteAssembledVehicle } = useInventory();
+  const { assembledVehicles, deleteAssembledVehicle } = useInventory();
   const { toast } = useToast();
   const { user } = useUser();
   const isPrivilegedUser = user?.role === 'owner' || user?.role === 'administrator';
@@ -45,8 +45,8 @@ export function AssembledVehiclesTable() {
     deleteAssembledVehicle(vehicleId, restock);
     toast({
         variant: "destructive",
-        title: "Vehicle Deleted",
-        description: `The ${modelName} with chassis ${chassisNumber} has been deleted. ${restock ? 'Parts have been restocked.' : ''}`
+        title: "Vehicle Deletion Queued",
+        description: `The ${modelName} with chassis ${chassisNumber} will be deleted shortly.`
     });
   }
 
@@ -80,11 +80,10 @@ export function AssembledVehiclesTable() {
             <TableBody>
               {assembledVehicles.length > 0 ? (
                 assembledVehicles.map((vehicle, index) => {
-                  const model = getVehicleModel(vehicle.modelId);
                   return (
                     <TableRow key={vehicle.id}>
                       <TableCell>{index + 1}</TableCell>
-                      <TableCell>{model?.name || "Unknown Model"}</TableCell>
+                      <TableCell>{vehicle.modelName || "Unknown Model"}</TableCell>
                       <TableCell>{vehicle.chassisNumber}</TableCell>
                       <TableCell>{vehicle.motorNumber}</TableCell>
                       <TableCell>
@@ -107,10 +106,10 @@ export function AssembledVehiclesTable() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, false)}>
+                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, vehicle.modelName || '', vehicle.chassisNumber, false)}>
                                     Delete Only
                                 </AlertDialogAction>
-                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, model?.name || '', vehicle.chassisNumber, true)}>
+                                <AlertDialogAction onClick={() => handleDelete(vehicle.id, vehicle.modelName || '', vehicle.chassisNumber, true)}>
                                     Delete and Restock
                                 </AlertDialogAction>
                                 </AlertDialogFooter>

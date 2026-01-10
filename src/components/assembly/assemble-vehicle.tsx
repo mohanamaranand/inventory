@@ -1,9 +1,11 @@
 
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useInventory } from "@/context/inventory-context-firebase";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -13,7 +15,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,124 +22,66 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useInventory } from "@/context/inventory-context-firebase";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
-import { Badge } from "../ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
-  modelId: z.string({ required_error: "Please select a vehicle model." }),
+  modelId: z.string().min(1, "Please select a vehicle model."),
   chassisNumber: z.string().min(1, "Chassis number is required."),
   motorNumber: z.string().min(1, "Motor number is required."),
 });
 
 export function AssembleVehicle() {
-  const { inventory, vehicleModels, assembleVehicle, getItemByStdCode, assembledVehicles } = useInventory();
+  const { vehicleModels, assembleVehicle } = useInventory();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      modelId: "",
+      chassisNumber: "",
+      motorNumber: "",
+    },
   });
 
-  const selectedModelId = form.watch("modelId");
-  const selectedModel = useMemo(
-    () => vehicleModels.find((m) => m.id === selectedModelId),
-    [selectedModelId, vehicleModels]
-  );
-
-  const partsAvailability = useMemo(() => {
-    if (!selectedModel) return [];
-    return selectedModel.parts.map((part) => {
-      const inventoryItem = getItemByStdCode(part.itemStdCode);
-      const available = inventoryItem ? inventoryItem.quantity : 0;
-      return {
-        ...part,
-        productName: inventoryItem?.productName || "Unknown Item",
-        available,
-        sufficient: available >= part.quantity,
-      };
-    });
-  }, [selectedModel, getItemByStdCode, inventory]);
-  
-  const canAssemble = partsAvailability.every(p => p.sufficient);
-
-  const chassisNumber = form.watch("chassisNumber");
-  const motorNumber = form.watch("motorNumber");
-
-  useEffect(() => {
-    if (chassisNumber && assembledVehicles.some(v => v.chassisNumber === chassisNumber)) {
-      form.setError("chassisNumber", {
-        type: "manual",
-        message: "This chassis number is already in use.",
-      });
-    } else {
-      form.clearErrors("chassisNumber");
-    }
-  }, [chassisNumber, assembledVehicles, form]);
-
-  useEffect(() => {
-    if (motorNumber && assembledVehicles.some(v => v.motorNumber === motorNumber)) {
-      form.setError("motorNumber", {
-        type: "manual",
-        message: "This motor number is already in use.",
-      });
-    } else {
-      form.clearErrors("motorNumber");
-    }
-  }, [motorNumber, assembledVehicles, form]);
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (assembledVehicles.some(v => v.chassisNumber === values.chassisNumber)) {
-      form.setError("chassisNumber", {
-        type: "manual",
-        message: "This chassis number is already in use.",
-      });
-      return;
-    }
-
-    if (assembledVehicles.some(v => v.motorNumber === values.motorNumber)) {
-      form.setError("motorNumber", {
-        type: "manual",
-        message: "This motor number is already in use.",
-      });
-      return;
+    const selectedModel = vehicleModels.find(m => m.id === values.modelId);
+    if (!selectedModel) {
+        toast({
+            variant: "destructive",
+            title: "Validation Error",
+            description: "Selected vehicle model not found. Please refresh and try again.",
+        });
+        return;
     }
 
     setIsSubmitting(true);
-    const { id: toastId } = toast({
-      title: `Assembling ${selectedModel?.name || 'Vehicle'}...`,
-      description: `Chassis: ${values.chassisNumber}. This may take a moment.`,
-    });
 
     try {
-      await assembleVehicle({ ...values });
-      toast({
-        id: toastId,
-        variant: "default",
-        title: `Assembly Queued: ${selectedModel?.name}`,
-        description: `The vehicle with chassis ${values.chassisNumber} has been added to the assembly queue.`,
+      // The new assembleVehicle function handles everything transactionally
+      await assembleVehicle({
+        ...values, 
+        modelName: selectedModel.name, // Add the modelName to the payload
       });
-      form.reset({ modelId: values.modelId, chassisNumber: "", motorNumber: ""});
-    } catch (error: any) {
+      
       toast({
-        id: toastId,
+        variant: "default",
+        title: "Assembly Successful",
+        description: `${selectedModel.name} with chassis ${values.chassisNumber} has been assembled.`,
+      });
+      form.reset();
+    } catch (error: any) {
+      // The backend now returns specific errors (e.g., for duplicates)
+      toast({
         variant: "destructive",
         title: "Assembly Failed",
-        description: error.message,
+        description: error.message || "Could not assemble the vehicle.",
       });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -146,24 +89,24 @@ export function AssembleVehicle() {
     <Card>
       <CardHeader>
         <CardTitle>Assemble a New Vehicle</CardTitle>
-        <CardDescription>
-          Select a model, provide vehicle details, and assemble it. This will
-          deduct the required parts from your inventory.
-        </CardDescription>
       </CardHeader>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="space-y-6">
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="modelId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vehicle Model</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={isSubmitting}
+                  >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a model to assemble" />
+                        <SelectValue placeholder="Select a model" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -178,79 +121,44 @@ export function AssembleVehicle() {
                 </FormItem>
               )}
             />
-
-            {selectedModel && (
-              <Card className="bg-muted/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">Required Parts</CardTitle>
-                  <CardDescription>
-                    Check if you have enough parts in stock to assemble this model.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    <TooltipProvider>
-                      {partsAvailability.map((part, index) => (
-                        <li key={index} className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger>
-                                {part.sufficient ? <CheckCircle className="h-4 w-4 text-green-500" /> : <AlertTriangle className="h-4 w-4 text-destructive" />}
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {part.sufficient ? 'Sufficient parts in stock' : 'Insufficient parts in stock'}
-                              </TooltipContent>
-                            </Tooltip>
-                            <span>{part.productName} ({part.itemStdCode})</span>
-                          </div>
-                          <Badge variant={part.sufficient ? "secondary" : "destructive"}>
-                            Required: {part.quantity} / Available: {part.available}
-                          </Badge>
-                        </li>
-                      ))}
-                    </TooltipProvider>
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="chassisNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Chassis Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter unique chassis number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="motorNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Motor Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter unique motor number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" disabled={!selectedModel || !canAssemble || isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
-              {isSubmitting ? "Queuing..." : "Assemble Vehicle"}
+            <FormField
+              control={form.control}
+              name="chassisNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chassis Number</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter chassis number" {...field} disabled={isSubmitting} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="motorNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Motor Number</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter motor number" {...field} disabled={isSubmitting} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Assembling...
+                </>
+              ) : (
+                'Assemble Vehicle'
+              )}
             </Button>
-          </CardFooter>
-        </form>
-      </Form>
+          </form>
+        </Form>
+      </CardContent>
     </Card>
   );
 }

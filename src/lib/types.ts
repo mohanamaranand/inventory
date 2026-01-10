@@ -73,6 +73,7 @@ export interface VehicleModel {
 export interface AssembledVehicle {
   id: string;
   modelId: string;
+  modelName: string;
   chassisNumber: string;
   motorNumber: string;
   assemblyDate: Timestamp | Date;
@@ -92,6 +93,7 @@ export interface BatteryModel {
 export interface AssembledBattery {
     id: string;
     modelId: string;
+    modelName: string;
     serialNumber: string;
     assemblyDate: Timestamp | Date;
 }
