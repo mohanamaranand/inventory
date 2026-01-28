@@ -587,16 +587,28 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const inventorySnapshot = await getDocs(inventoryQuery);
                 const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
                 
-                let model: VehicleModel | undefined;
-                
+                // Fetch models directly from DB if context not ready or use separate function
+                const modelRef = doc(db, 'vehicleModels', vehicle.modelId);
+                const modelSnap = await getDoc(modelRef);
+                const model = modelSnap.data() as VehicleModel;
+
                 if (request.restock) {
-                    model = getVehicleModel(vehicle.modelId);
-                    if (!model?.parts) throw new Error("Vehicle model or parts not found for restocking.");
-                    
-                    // ... (restocking logic can be refactored)
+                     if (!modelSnap.exists() || !model?.parts) throw new Error("Vehicle model or parts not found for restocking.");
                 }
                 
                 await runTransaction(db, async (transaction) => {
+                    if (request.restock) {
+                        for (const part of model.parts) {
+                            const inventoryQuery = query(collection(db, 'inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+                            const inventoryDocs = await getDocs(inventoryQuery);
+                            if (!inventoryDocs.empty) {
+                                const invDoc = inventoryDocs.docs[0];
+                                const currentQty = invDoc.data().quantity || 0;
+                                transaction.update(invDoc.ref, { quantity: currentQty + part.quantity });
+                            }
+                        }
+                    }
+
                     if (inventoryItemRef) transaction.delete(inventoryItemRef);
                     transaction.delete(vehicleRef);
                 });
@@ -611,11 +623,25 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
                 const inventorySnapshot = await getDocs(inventoryQuery);
                 const inventoryItemRef = !inventorySnapshot.empty ? inventorySnapshot.docs[0].ref : null;
 
-                let model = getBatteryModel(battery.modelId);
+                const modelRef = doc(db, 'batteryModels', battery.modelId);
+                const modelSnap = await getDoc(modelRef);
+                const model = modelSnap.data() as BatteryModel;
+
+                if (request.restock) {
+                    if (!modelSnap.exists() || !model?.parts) throw new Error("Battery model or parts not found for restocking.");
+                }
                 
                 await runTransaction(db, async (transaction) => {
-                    if (request.restock && model?.parts) {
-                        // ... (restocking logic can be refactored)
+                    if (request.restock) {
+                        for (const part of model.parts) {
+                            const inventoryQuery = query(collection(db, 'inventory'), where('itemStdCode', '==', part.itemStdCode), limit(1));
+                            const inventoryDocs = await getDocs(inventoryQuery);
+                            if (!inventoryDocs.empty) {
+                                const invDoc = inventoryDocs.docs[0];
+                                const currentQty = invDoc.data().quantity || 0;
+                                transaction.update(invDoc.ref, { quantity: currentQty + part.quantity });
+                            }
+                        }
                     }
                     if (inventoryItemRef) transaction.delete(inventoryItemRef);
                     transaction.delete(batteryRef);
@@ -636,7 +662,7 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     };
 
     processDeletionQueue();
-  }, [deletionQueue, isProcessingDeletion, db, getVehicleModel, getBatteryModel, toast, getCollectionRef]);
+  }, [deletionQueue, isProcessingDeletion, db, toast, getCollectionRef]);
 
   const value = useMemo(
     () => ({
