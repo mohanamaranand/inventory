@@ -14,7 +14,7 @@ import {
   LayoutDashboard,
   Boxes,
   Truck,
-  Warehouse,
+  Bike,
   Wrench,
   Database,
   ShoppingCart,
@@ -97,7 +97,7 @@ export function AppSidebar() {
       <SidebarHeader>
         <div className="flex w-full items-center justify-between gap-2 overflow-hidden px-2">
           <div className="flex items-center gap-2">
-            <Warehouse className="size-6 shrink-0 text-primary" />
+            <Bike className="size-6 shrink-0 text-primary" />
             <span className="text-lg font-semibold">StockPilot</span>
           </div>
           <div className="flex items-center">
